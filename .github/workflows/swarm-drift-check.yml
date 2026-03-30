@@ -10,7 +10,7 @@
 #   AWS_DEFAULT_REGION   (e.g. us-east-1)
 #
 # Optional:
-#   SWARM_BEDROCK_MODEL  (default: anthropic.claude-3-5-haiku-20241022-v1:0)
+#   SWARM_BEDROCK_MODEL  (default: amazon.nova-micro-v1:0)
 #
 # Setup: run `swarm setup-drift-check` in any division repo, or copy this
 # file manually and commit it to .github/workflows/.
@@ -145,7 +145,7 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
-          SWARM_BEDROCK_MODEL: ${{ vars.SWARM_BEDROCK_MODEL || 'anthropic.claude-3-5-haiku-20241022-v1:0' }}
+          SWARM_BEDROCK_MODEL: ${{ vars.SWARM_BEDROCK_MODEL || 'amazon.nova-micro-v1:0' }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_REF_NAME: ${{ github.ref_name }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
@@ -228,7 +228,7 @@ If everything looks good, say so in one sentence. Max 250 words."""
               assessment = (
                   f"⚠️ Bedrock invocation failed — check AWS credentials and model access.\n\n"
                   f"```\n{err}\n```\n\n"
-                  f"Enable model access: AWS Console → Bedrock → Model access → Claude 3.5 Haiku"
+                  f"Enable model access: AWS Console → Bedrock → Model access → Amazon Nova Micro"
               )
           else:
               resp = json.loads(Path("/tmp/swarm/bedrock_response.json").read_text())

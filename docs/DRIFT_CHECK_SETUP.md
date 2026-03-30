@@ -1,6 +1,6 @@
 # SwarmCity Drift Check — Setup Guide
 
-The `swarm-drift-check.yml` workflow uses **AWS Bedrock (Claude 3.5 Haiku)** to assess
+The `swarm-drift-check.yml` workflow uses **AWS Bedrock (Amazon Nova Micro)** to assess
 documentation drift between code changes and `.swarm/` state on every merge to `dev`/`prod`.
 
 The quickest way to install it:
@@ -17,7 +17,7 @@ Or follow the manual steps below.
 ## 1. Enable Bedrock Model Access
 
 1. AWS Console → **Amazon Bedrock** → **Model access**
-2. Click **Modify model access** → enable **Anthropic Claude 3.5 Haiku**
+2. Click **Modify model access** → enable **Amazon Nova Micro**
 3. Submit (usually instant)
 
 > Do this once per AWS account/region.
@@ -43,7 +43,7 @@ If the IAM user doesn't have Bedrock access, add this inline policy:
   "Statement": [{
     "Effect": "Allow",
     "Action": "bedrock:InvokeModel",
-    "Resource": "arn:aws:bedrock:*::foundation-model/anthropic.claude-3-5-haiku-20241022-v1:0"
+    "Resource": "arn:aws:bedrock:*::foundation-model/amazon.nova-micro-v1:0"
   }]
 }
 ```
@@ -59,7 +59,7 @@ Set a repo/org **variable** (not secret) named `SWARM_BEDROCK_MODEL`:
 
 | Model | Use case |
 |-------|----------|
-| `anthropic.claude-3-5-haiku-20241022-v1:0` | **Default** — fast, cheap |
+| `amazon.nova-micro-v1:0` | **Default** — fast, cheap |
 | `anthropic.claude-3-5-sonnet-20241022-v2:0` | Deeper analysis |
 
 ```bash

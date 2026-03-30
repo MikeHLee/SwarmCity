@@ -13,7 +13,7 @@ from pathlib import Path
 
 CONFIG_PATH = Path.home() / ".config" / "swarm" / "config.toml"
 
-DEFAULT_MODEL  = "anthropic.claude-3-5-haiku-20241022-v1:0"
+DEFAULT_MODEL  = "amazon.nova-micro-v1:0"
 DEFAULT_REGION = "us-east-1"
 
 # ---------------------------------------------------------------------------
