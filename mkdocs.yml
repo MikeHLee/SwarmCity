@@ -26,10 +26,10 @@ theme:
     - content.code.copy
 
 nav:
-  - Home: README.md
-  - Architecture: docs/ARCHITECTURE.md
-  - Platform Setup: docs/PLATFORM_SETUP.md
-  - Drift Check Setup: docs/DRIFT_CHECK_SETUP.md
+  - Home: index.md
+  - Architecture: ARCHITECTURE.md
+  - Platform Setup: PLATFORM_SETUP.md
+  - Drift Check Setup: DRIFT_CHECK_SETUP.md
 
 markdown_extensions:
   - admonition

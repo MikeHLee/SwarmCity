@@ -8,6 +8,15 @@ version = "0.2.0"
 description = "SwarmCity — markdown-native agent orchestration for multi-repo organizations"
 readme = "README.md"
 requires-python = ">=3.11"
+license = { text = "MIT" }
+keywords = ["swarm", "agent", "orchestration", "mcp", "git", "markdown", "coordination"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
 authors = [
     { name = "Michaellee" }
 ]
@@ -15,6 +24,12 @@ dependencies = [
     "click>=8.1",
     "mcp>=1.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/MikeHLee/SwarmCity"
+Documentation = "https://mikehlee.github.io/SwarmCity/"
+Repository = "https://github.com/MikeHLee/SwarmCity.git"
+Issues = "https://github.com/MikeHLee/SwarmCity/issues"
 
 [project.optional-dependencies]
 ai = [
