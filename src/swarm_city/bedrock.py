@@ -21,24 +21,29 @@ DEFAULT_REGION = "us-east-1"
 # ---------------------------------------------------------------------------
 
 def load_config() -> dict:
-    """Return {'model': ..., 'region': ...} with defaults if file missing."""
+    """Return {'model', 'region', 'interface'} with defaults if file missing."""
     if CONFIG_PATH.exists():
         try:
-            data = tomllib.loads(CONFIG_PATH.read_text())
+            data    = tomllib.loads(CONFIG_PATH.read_text())
             bedrock = data.get("bedrock", {})
+            ai      = data.get("ai", {})
             return {
-                "model":  bedrock.get("model",  DEFAULT_MODEL),
-                "region": bedrock.get("region", DEFAULT_REGION),
+                "model":     bedrock.get("model",     DEFAULT_MODEL),
+                "region":    bedrock.get("region",    DEFAULT_REGION),
+                "interface": ai.get("interface",      "bedrock"),
             }
         except Exception:
             pass
-    return {"model": DEFAULT_MODEL, "region": DEFAULT_REGION}
+    return {"model": DEFAULT_MODEL, "region": DEFAULT_REGION, "interface": "bedrock"}
 
 
-def save_config(model: str, region: str) -> None:
-    """Write model and region to ~/.config/swarm/config.toml atomically."""
+def save_config(model: str, region: str, interface: str = "bedrock") -> None:
+    """Write model, region, and interface to ~/.config/swarm/config.toml atomically."""
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    content = f'[bedrock]\nmodel  = "{model}"\nregion = "{region}"\n'
+    content = (
+        f'[bedrock]\nmodel     = "{model}"\nregion    = "{region}"\n\n'
+        f'[ai]\ninterface = "{interface}"\n'
+    )
     tmp = CONFIG_PATH.with_suffix(".toml.tmp")
     tmp.write_text(content)
     tmp.replace(CONFIG_PATH)

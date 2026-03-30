@@ -121,6 +121,61 @@ def build_context_bundle(paths: SwarmPaths, context_limit: int = 1200) -> str:
 # Bedrock invocation
 # ---------------------------------------------------------------------------
 
+def invoke_via_cli(cli_name: str, user_message: str) -> dict:
+    """Invoke a local LLM CLI (claude, gemini, opencode) and return parsed JSON.
+
+    Passes the same SYSTEM_PROMPT as the Bedrock path so the response
+    schema is identical. Requires the chosen CLI to be installed and in PATH.
+
+    Supported interfaces and their non-interactive flags:
+      claude    → claude -p "<prompt>"   (Claude Code CLI)
+      gemini    → gemini -p "<prompt>"   (Gemini CLI)
+      opencode  → opencode run "<prompt>" (OpenCode)
+
+    Raises:
+        FileNotFoundError: if the CLI binary is not found in PATH
+        RuntimeError: if the CLI exits non-zero
+        json.JSONDecodeError: if the response is not valid JSON after cleaning
+    """
+    import shutil
+    import subprocess
+
+    bin_path = shutil.which(cli_name)
+    if not bin_path:
+        raise FileNotFoundError(
+            f"'{cli_name}' not found in PATH. "
+            f"Install it and make sure it's on your PATH before using --via {cli_name}."
+        )
+
+    full_prompt = (
+        f"SYSTEM INSTRUCTIONS — follow exactly:\n{SYSTEM_PROMPT}\n"
+        f"---\n\n"
+        f"{user_message}"
+    )
+
+    if cli_name in ("claude", "gemini"):
+        cmd = [bin_path, "-p", full_prompt]
+    elif cli_name == "opencode":
+        cmd = [bin_path, "run", full_prompt]
+    else:
+        raise ValueError(f"Unknown CLI interface: {cli_name!r}")
+
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+
+    if result.returncode != 0:
+        stderr = (result.stderr or result.stdout)[:400]
+        raise RuntimeError(f"{cli_name} exited {result.returncode}: {stderr}")
+
+    raw = result.stdout.strip()
+    # Strip accidental markdown fences despite instructions
+    clean = raw
+    if clean.startswith("```"):
+        clean = clean.split("\n", 1)[-1]
+    if clean.endswith("```"):
+        clean = clean.rsplit("```", 1)[0]
+    return json.loads(clean.strip())
+
+
 def invoke_ai(client, model: str, user_message: str) -> dict:
     """Call Bedrock converse API and return the parsed JSON response dict.
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -542,60 +543,89 @@ def block(ctx: click.Context, item_id: str, reason: str) -> None:
 
 @cli.command()
 def configure() -> None:
-    """Interactive wizard: set Bedrock model + region, test connectivity.
+    """Interactive wizard: choose an LLM interface and configure it.
 
-    Credentials are NEVER stored here. boto3 reads them from the standard
-    AWS credential chain: env vars → ~/.aws/credentials → IAM role.
+    Supported interfaces:
+      bedrock   — AWS Bedrock (default, Amazon Nova Micro). Requires boto3 + AWS creds.
+      claude    — Claude Code CLI  (https://claude.ai/code)
+      gemini    — Gemini CLI       (https://github.com/google-gemini/gemini-cli)
+      opencode  — OpenCode         (https://opencode.ai)
 
-    Run 'aws configure' or set AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY
-    in your environment before running this.
+    For claude/gemini/opencode, no API keys are managed here — the CLI tools
+    handle their own auth. Just install them and they work.
     """
-    try:
-        import boto3  # noqa: F401  (just checking it's available)
-    except ImportError:
-        click.echo("Error: boto3 not installed. Run: pip install 'swarm-city[ai]'", err=True)
-        raise SystemExit(1)
-
     from . import bedrock as _bedrock
 
+    _INTERFACES = ["bedrock", "claude", "gemini", "opencode"]
+    _DETECTED   = [i for i in ["claude", "gemini", "opencode"] if shutil.which(i)]
+
+    click.echo("SwarmCity AI interface configuration\n")
+    click.echo("Available interfaces:")
+    for iface in _INTERFACES:
+        detected = " (detected)" if shutil.which(iface) or iface == "bedrock" else ""
+        click.echo(f"  {iface}{detected}")
+    click.echo()
+
     cfg = _bedrock.load_config()
+    current = cfg.get("interface", "bedrock")
+    interface = click.prompt("  Default interface", default=current,
+                             type=click.Choice(_INTERFACES))
 
-    click.echo("SwarmCity Bedrock configuration\n")
-    click.echo("Credentials: boto3 credential chain")
-    click.echo("  (env vars → ~/.aws/credentials → IAM role — never stored here)\n")
-
-    model  = click.prompt("  Bedrock model",  default=cfg["model"])
-    region = click.prompt("  AWS region",     default=cfg["region"])
-
-    if click.confirm("\n  Test connectivity now?", default=True):
-        click.echo("  Connecting...", nl=False)
+    if interface == "bedrock":
         try:
-            client = _bedrock.get_bedrock_client(region)
-            ok, msg = _bedrock.test_connectivity(client, model)
-        except Exception as e:
-            ok, msg = False, str(e)
+            import boto3  # noqa: F401
+        except ImportError:
+            click.echo("\nError: boto3 not installed. Run: pip install 'swarm-city[ai]'", err=True)
+            raise SystemExit(1)
 
-        if ok:
-            click.echo(" ✓ OK")
-        else:
-            click.echo(f" ✗\n")
-            if "NoCredentialsError" in msg or "CredentialRetrievalError" in msg:
-                click.echo("  No AWS credentials found. Options:")
-                click.echo("    aws configure                          (interactive)")
-                click.echo("    export AWS_ACCESS_KEY_ID=...           (env var)")
-                click.echo("    export AWS_SECRET_ACCESS_KEY=...")
-            elif "AccessDeniedException" in msg or "AuthorizationError" in msg:
-                click.echo("  Access denied. Check two things:")
-                click.echo("    1. IAM policy: add bedrock:InvokeModel on the model ARN")
-                click.echo("    2. Bedrock model access: AWS Console → Bedrock → Model access")
-            elif "EndpointResolution" in msg or "Connection" in msg:
-                click.echo(f"  Connection failed — is region '{region}' correct?")
+        click.echo("\nBedrock configuration")
+        click.echo("  Credentials: boto3 chain (env vars → ~/.aws/credentials → IAM role)\n")
+        model  = click.prompt("  Bedrock model",  default=cfg["model"])
+        region = click.prompt("  AWS region",     default=cfg["region"])
+
+        if click.confirm("\n  Test connectivity now?", default=True):
+            click.echo("  Connecting...", nl=False)
+            try:
+                client = _bedrock.get_bedrock_client(region)
+                ok, msg = _bedrock.test_connectivity(client, model)
+            except Exception as e:
+                ok, msg = False, str(e)
+
+            if ok:
+                click.echo(" ✓ OK")
             else:
-                click.echo(f"  Error: {msg[:200]}")
+                click.echo(" ✗\n")
+                if "NoCredentialsError" in msg or "CredentialRetrievalError" in msg:
+                    click.echo("  No AWS credentials found. Options:")
+                    click.echo("    aws configure                (interactive)")
+                    click.echo("    export AWS_ACCESS_KEY_ID=... (env var)")
+                    click.echo("    export AWS_SECRET_ACCESS_KEY=...")
+                elif "AccessDeniedException" in msg or "AuthorizationError" in msg:
+                    click.echo("  Access denied. Check:")
+                    click.echo("    1. IAM policy: bedrock:InvokeModel on the model ARN")
+                    click.echo("    2. AWS Console → Bedrock → Model access → enable Amazon Nova Micro")
+                elif "EndpointResolution" in msg or "Connection" in msg:
+                    click.echo(f"  Connection failed — is region '{region}' correct?")
+                else:
+                    click.echo(f"  Error: {msg[:200]}")
 
-    _bedrock.save_config(model, region)
+        _bedrock.save_config(model, region, interface=interface)
+    else:
+        if not shutil.which(interface):
+            click.echo(f"\n  Warning: '{interface}' not found in PATH.")
+            if interface == "claude":
+                click.echo("  Install: https://claude.ai/code")
+            elif interface == "gemini":
+                click.echo("  Install: https://github.com/google-gemini/gemini-cli")
+            elif interface == "opencode":
+                click.echo("  Install: https://opencode.ai")
+        else:
+            click.echo(f"\n  '{interface}' found at {shutil.which(interface)} ✓")
+        _bedrock.save_config(cfg["model"], cfg["region"], interface=interface)
+
     click.echo(f"\n  Config saved to {_bedrock.CONFIG_PATH}")
-    click.echo("  Run 'swarm ai \"what should I work on next?\"' to try it out.")
+    click.echo(f"  Run 'swarm ai \"what should I work on next?\"' to try it out.")
+    click.echo(f"  Run 'swarm session' to launch an interactive {interface} session.")
 
 
 # ---------------------------------------------------------------------------
@@ -607,8 +637,12 @@ def configure() -> None:
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation and execute immediately")
 @click.option("--agent", "agent_id", default=None, help="Agent ID override")
 @click.option("--limit", "context_limit", default=1200, help="Approx token limit for context bundle (default: 1200)")
+@click.option("--via", "interface", default=None,
+              type=click.Choice(["bedrock", "claude", "gemini", "opencode"]),
+              help="LLM backend to use (default: from swarm configure, or bedrock)")
 @click.pass_context
-def ai_cmd(ctx: click.Context, instruction: str, yes: bool, agent_id: str | None, context_limit: int) -> None:
+def ai_cmd(ctx: click.Context, instruction: str, yes: bool, agent_id: str | None,
+           context_limit: int, interface: str | None) -> None:
     """Translate a natural language instruction into .swarm/ operations.
 
     Examples:
@@ -617,13 +651,9 @@ def ai_cmd(ctx: click.Context, instruction: str, yes: bool, agent_id: str | None
       swarm ai "what should I work on next?"
       swarm ai "write a memory entry: chose NATS over Kafka for native async"
       swarm ai "update my focus to the markets ASGI fix" --yes
+      swarm ai "what should I work on?" --via claude
+      swarm ai "add a queue item for OAuth" --via gemini
     """
-    try:
-        import boto3  # noqa: F401
-    except ImportError:
-        click.echo("Error: boto3 not installed. Run: pip install 'swarm-city[ai]'", err=True)
-        raise SystemExit(1)
-
     from . import bedrock as _bedrock
     from . import ai_ops as _ai
 
@@ -631,16 +661,27 @@ def ai_cmd(ctx: click.Context, instruction: str, yes: bool, agent_id: str | None
     agent  = agent_id or _default_agent()
     cfg    = _bedrock.load_config()
 
+    # Resolve interface: --via flag > config > bedrock default
+    resolved = interface or cfg.get("interface", "bedrock")
+
     # Build context and prompt
     context  = _ai.build_context_bundle(paths, context_limit=context_limit)
     user_msg = f"Instruction: {instruction}\n\n{context}"
 
-    # Call Bedrock
+    # Invoke the chosen backend
     try:
-        client = _bedrock.get_bedrock_client(cfg["region"])
-        result = _ai.invoke_ai(client, cfg["model"], user_msg)
-    except ImportError:
-        click.echo("Error: boto3 not installed. Run: pip install 'swarm-city[ai]'", err=True)
+        if resolved == "bedrock":
+            try:
+                import boto3  # noqa: F401
+            except ImportError:
+                click.echo("Error: boto3 not installed. Run: pip install 'swarm-city[ai]'", err=True)
+                raise SystemExit(1)
+            client = _bedrock.get_bedrock_client(cfg["region"])
+            result = _ai.invoke_ai(client, cfg["model"], user_msg)
+        else:
+            result = _ai.invoke_via_cli(resolved, user_msg)
+    except FileNotFoundError as e:
+        click.echo(f"Error: {e}", err=True)
         raise SystemExit(1)
     except Exception as e:
         kind = type(e).__name__
@@ -683,6 +724,115 @@ def ai_cmd(ctx: click.Context, instruction: str, yes: bool, agent_id: str | None
     results = _ai.execute_operations(paths, write_ops, agent)
     for r in results:
         click.echo(r)
+
+
+# ---------------------------------------------------------------------------
+# swarm session
+# ---------------------------------------------------------------------------
+
+_CLI_CANDIDATES = ["claude", "gemini", "opencode"]
+
+_CLI_INSTALL_HINTS = {
+    "claude":   "https://claude.ai/code",
+    "gemini":   "https://github.com/google-gemini/gemini-cli",
+    "opencode": "https://opencode.ai",
+}
+
+_CLI_NONINTERACTIVE_FLAGS = {
+    "claude":   ["-p"],
+    "gemini":   ["-p"],
+    "opencode": ["run"],
+}
+
+
+@cli.command(name="session")
+@click.option("--with", "interface",
+              type=click.Choice(["auto", "claude", "gemini", "opencode"]),
+              default="auto",
+              help="LLM CLI to launch (default: auto-detect from PATH)")
+@click.argument("prompt", required=False, default=None)
+@click.pass_context
+def session_cmd(ctx: click.Context, interface: str, prompt: str | None) -> None:
+    """Launch an interactive LLM session seeded with .swarm/ context.
+
+    With no PROMPT, opens an interactive session in the division root.
+    CLAUDE.md in the root automatically loads .swarm/ context for Claude Code.
+    For gemini and opencode a CURRENT_SESSION.md context file is written first.
+
+    With a PROMPT argument, runs a single non-interactive turn and prints output.
+
+    Auto-detection order: claude → gemini → opencode.
+
+    Examples:
+      swarm session                          # interactive, auto-detect CLI
+      swarm session --with gemini            # interactive, force gemini
+      swarm session "what should I pick up?" # seeded single-turn
+      swarm session --with claude "summarise the active queue"
+    """
+    from . import ai_ops as _ai
+
+    paths    = _get_paths(ctx.obj["path"])
+    div_root = paths.root.parent
+
+    # Resolve interface
+    if interface == "auto":
+        from . import bedrock as _bedrock
+        cfg = _bedrock.load_config()
+        preferred = cfg.get("interface", "bedrock")
+        # If configured interface is a CLI tool, prefer it; else auto-detect
+        if preferred in _CLI_CANDIDATES and shutil.which(preferred):
+            interface = preferred
+        else:
+            interface = next((c for c in _CLI_CANDIDATES if shutil.which(c)), None)
+        if not interface:
+            click.echo(
+                "No LLM CLI found in PATH. Install one of:\n"
+                + "\n".join(f"  {k}: {v}" for k, v in _CLI_INSTALL_HINTS.items()),
+                err=True,
+            )
+            raise SystemExit(1)
+    elif not shutil.which(interface):
+        hint = _CLI_INSTALL_HINTS.get(interface, "")
+        click.echo(f"'{interface}' not found in PATH.  {hint}", err=True)
+        raise SystemExit(1)
+
+    bin_path = shutil.which(interface)
+
+    # Session banner
+    state_text  = paths.state.read_text().strip() if paths.state.exists() else ""
+    focus_line  = next((l for l in state_text.splitlines() if "Current focus" in l), "")
+    click.echo(f"  Division : {div_root.name}")
+    if focus_line:
+        click.echo(f"  {focus_line.strip()}")
+    click.echo(f"  Interface: {interface}  ({bin_path})")
+    click.echo()
+
+    if prompt:
+        # Single non-interactive turn: inject context + prompt
+        context = _ai.build_context_bundle(paths)
+        seeded  = (
+            f"SwarmCity context for {div_root.name}:\n\n{context}"
+            f"\n\n---\n\nUser: {prompt}"
+        )
+        flags = _CLI_NONINTERACTIVE_FLAGS.get(interface, ["-p"])
+        os.execv(bin_path, [interface] + flags + [seeded])
+    else:
+        # Interactive: for non-claude tools write a context file first
+        if interface != "claude":
+            context   = _ai.build_context_bundle(paths)
+            ctx_file  = paths.root / "CURRENT_SESSION.md"
+            ctx_file.write_text(
+                f"# SwarmCity Session Context — {div_root.name}\n\n"
+                f"Read this file to understand the current state, then assist the user.\n\n"
+                f"{context}\n"
+            )
+            rel = ctx_file.relative_to(div_root)
+            click.echo(f"  Context written to {rel}")
+            click.echo(f"  (Delete {rel} when done to keep the repo clean.)")
+            click.echo()
+
+        os.chdir(div_root)
+        os.execv(bin_path, [interface])
 
 
 # ---------------------------------------------------------------------------
