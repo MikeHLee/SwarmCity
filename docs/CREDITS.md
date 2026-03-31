@@ -29,6 +29,42 @@ hand off without stepping on each other.
 
 ---
 
+## The Biological Argument
+
+Central coordination is expensive. In the natural systems that inspired SwarmCity,
+it is avoided almost universally — and in the rare cases where a "central" figure
+exists, the burden of coordination is not placed on that figure at all.
+
+An ant or bee queen does not manage work. She does not assign tasks, resolve
+conflicts, or approve sub-team formation. She emits **chemical markers** —
+pheromone signals that encode colony state — and workers read those signals
+autonomously to decide what to do. The queen's energy budget is not consumed by
+coordination overhead. Coordination is a property of the **shared medium**, not of
+any single agent.
+
+This design produces emergent capabilities no top-down architecture could replicate
+at the same cost:
+
+- **Hive splitting** — when a colony grows beyond a threshold, a subset self-organises
+  around a new queen without any central directive. Multi-master by default.
+- **Task-oriented sub-teams** — foraging, defence, nursing, and construction teams
+  form and dissolve based on pheromone gradient signals, not management assignments.
+- **Fault tolerance** — loss of any individual, including the queen, does not
+  immediately collapse coordination. The medium persists; workers re-orient.
+
+The single prerequisite for all of this: **all members speak the same chemical
+language.** Pheromone signals only work if every worker interprets them the same way.
+The protocol is the coordination.
+
+SwarmCity is a direct translation of this principle to software agent fleets. Models
+and tools that modify filesystem-native projects are better off leaving traces in their
+environment — readable by any subsequent agent — than reporting state to a central node
+around which complicated systems must be arranged to prevent bottlenecks and data loss
+from information overload. As long as agents speak the same language (follow
+`BOOTSTRAP.md`), coordination emerges from the files themselves.
+
+---
+
 ## Scientific Foundations
 
 ### Stigmergy — Indirect Coordination via Environment

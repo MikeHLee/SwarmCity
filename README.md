@@ -1,6 +1,8 @@
-# SwarmCity
-
-**Minimal, git-native, markdown-first agent orchestration for multi-repo organizations.**
+<div align="center">
+  <img src="logo.png" alt="SwarmCity" width="180" />
+  <h1>SwarmCity</h1>
+  <p><strong>Minimal, git-native, markdown-first agent orchestration for multi-repo organizations.</strong></p>
+</div>
 
 SwarmCity lets human developers and AI agents (Claude Code, Windsurf, Cursor, Gemini CLI,
 OpenCode, and others) coordinate work across multiple repositories without any external
@@ -13,6 +15,7 @@ as plain markdown files. Git is the only database.
 
 Modern software teams use multiple AI coding agents simultaneously across different
 platforms. Without coordination:
+
 - Two agents work on the same task simultaneously
 - Context is lost when chat history is compacted
 - Non-obvious decisions (why approach A over B) disappear forever
@@ -23,6 +26,45 @@ Database-backed tools add binary files and server processes to your repo.
 
 **SwarmCity takes a different approach: everything is a markdown file any agent on any
 platform can read and write directly.**
+
+---
+
+## The Nature Principle
+
+In nature, central coordinators are rarely used — and when they exist, they do not
+actively manage coordination.
+
+A bee queen does not dispatch workers or resolve conflicts. She emits chemical markers
+that encode colony state, and workers read those traces autonomously to decide what to
+do next. An ant queen does the same. The result is not top-down management — it is
+**multi-master consensus through a shared medium**. Hives split into independent
+sub-colonies. Ant colonies form task-specialized sub-teams. Neither requires a central
+node approving every action.
+
+The key property that makes this work: **all members speak the same chemical language.**
+Every worker interprets pheromone gradients the same way. The signal is the protocol.
+
+The cost of a central coordinator is not just latency — it is **information overload and
+single-point fragility**. A queen who had to consciously route every foraging decision
+would saturate immediately. The colony would slow to the speed of one brain.
+
+SwarmCity applies this directly to software agent fleets:
+
+!!! quote "The core principle"
+    Agents that modify filesystem-native projects should leave traces in their
+    environment for collaborative purposes, rather than reporting to a central node
+    around which complicated systems must be arranged to prevent bottlenecks and
+    data loss from information overload.
+
+The `.swarm/` directory *is* the shared medium. `state.md` *is* the pheromone trail.
+`BOOTSTRAP.md` *is* the chemical language every agent reads first. As long as agents
+follow the same protocol, coordination emerges from the environment — no coordination
+service required.
+
+**Signals decay.** Pheromone trails evaporate when not reinforced. SwarmCity reflects
+this: `swarm audit` flags stale claims, `memory.md` entries are dated, and `state.md`
+timestamps tell any agent exactly how fresh the picture is. Old signals stop misleading
+new workers.
 
 ---
 
@@ -42,9 +84,10 @@ Every repository gets a `.swarm/` directory with five files:
 
 ### The Pheromone Trail
 
-Inspired by stigmergy in swarm robotics: agents leave state traces (`state.md` updates)
-that guide successor agents without direct communication. The next agent reads `state.md`
-first — it tells you exactly where things stand in one glance.
+Agents leave state traces (`state.md` updates) that guide successor agents without
+direct communication. The next agent reads `state.md` first — it tells you exactly
+where things stand in one glance. This is **stigmergy**: coordination via environment
+modification, not via message passing.
 
 ### The Claim Pattern
 
@@ -80,184 +123,69 @@ live at org level with `refs:` pointers in each affected division's queue.
 
 ---
 
+## Why Not a Central Service?
+
+The typical alternative — a shared task server, a Slack bot, a GitHub Issues label
+workflow — introduces a coordination bottleneck that does not exist in the natural
+systems that inspired SwarmCity:
+
+| Central-node approach | Swarm approach |
+|---|---|
+| Agents report in, wait for assignments | Agents read environment, self-assign |
+| Server becomes single point of failure | `.swarm/` files replicated by git |
+| API credentials required per-agent | Plain file access, no auth layer |
+| Context window dumps to external system | Context lives where the code lives |
+| Bottleneck grows with fleet size | Throughput scales with number of agents |
+| Complex de-duplication logic needed | Optimistic claims + audit resolves conflicts |
+
+The bee colony analogy is exact: **multi-master protocols** (hive splitting, independent
+sub-colonies) emerge naturally when agents share a medium rather than a manager. Any
+agent can start work on any unclaimed item without asking permission. The environment —
+not a coordinator — serializes conflicting writes through timestamps and claim stamps.
+
+---
+
 ## Quick Start
 
 ### 1. Install
 
 ```bash
-# Clone the repository
-git clone https://github.com/oasis-x/swarm-city
-cd swarm-city
+pip install swarm-city
 
-# Install both CLI and MCP server
-pip install -e .
-
-# (Optional) Install AI features (for `swarm ai` and drift check)
-pip install -e ".[ai]"
+# With AI features (swarm ai, drift check)
+pip install 'swarm-city[ai]'
 ```
 
 ### 2. Initialize
 
 ```bash
-# Initialize in your repo
 cd your-repo
 swarm init
-
-# See current state
 swarm status
 ```
 
 ### 3. Coordinate
 
 ```bash
-# Claim a work item before starting
 swarm claim CLD-001
-
-# Work... then mark done
+# ... do work ...
 swarm done CLD-001 --note "Implemented JWT refresh via rotating secret"
-
-# Generate a handoff for the next session
 swarm handoff
 ```
 
 ---
 
-## CLI Reference
+## Credits
 
-```
-swarm init          Initialize .swarm/ in current directory
-swarm status        Show state and next available items
-swarm claim <id>    Claim a work item (updates queue.md + state.md atomically)
-swarm done <id>     Mark item done (updates queue.md + state.md)
-swarm add "<desc>"  Add a new work item (auto-assigns ID)
-swarm partial <id>  Mark partially done — safe for re-claim by next agent
-swarm block <id>    Mark blocked with reason
-swarm audit         Check for drift: stale claims, stale state.md
-swarm handoff       Generate a handoff doc for the next session
-swarm sync          Refresh org state snapshot from all division state files
-swarm ai "<instr>"  Translate natural language to .swarm/ operations (requires AWS Bedrock)
-```
+Inspired by Steve Yegge's ["Welcome to Gas Town"](https://steve-yegge.medium.com/welcome-to-gas-town-4f25ee16dd04)
+and grounded in stigmergy research spanning six decades, from Grassé's termite mound
+studies (1959) through Dorigo's Ant Colony Optimization (1996) to Bonabeau, Dorigo &
+Theraulaz's *Swarm Intelligence* (1999).
 
----
-
-## MCP Server
-
-The MCP server exposes all coordination operations as structured tools for agent
-platforms that support the Model Context Protocol (Claude Code, Windsurf, Cursor, etc.).
-
-### Configure in Claude Code (`~/.claude/settings.json`):
-
-```json
-{
-  "mcpServers": {
-    "swarm-city": {
-      "command": "python",
-      "args": ["-m", "swarm_city_mcp.server"],
-      "env": { "SWARM_ROOT": "/path/to/your/org-folder" }
-    }
-  }
-}
-```
-
-Available tools: `swarm_bootstrap`, `swarm_context`, `swarm_state`, `swarm_queue`,
-`swarm_claim`, `swarm_done`, `swarm_add`, `swarm_append_memory`, `swarm_audit`,
-`swarm_handoff`.
-
----
-
-## Platform Setup
-
-`swarm init` creates shim files automatically. Each shim is a one-liner that points
-the platform at `.swarm/BOOTSTRAP.md`. When the protocol changes, only `BOOTSTRAP.md`
-needs updating — all platforms update automatically.
-
-**Claude Code** (`CLAUDE.md`):
-```markdown
-Before starting any work, read @.swarm/BOOTSTRAP.md and follow the protocol exactly.
-Active context: @.swarm/context.md | State: @.swarm/state.md | Queue: @.swarm/queue.md
-```
-
-**Windsurf** (`.windsurfrules`):
-```
-Before starting any task, read .swarm/BOOTSTRAP.md and follow its protocol.
-Do not begin work without claiming an item in .swarm/queue.md.
-```
-
-**Cursor** (`.cursorrules`):
-```
-Always begin every session by reading .swarm/BOOTSTRAP.md.
-Follow the On Start, During Work, and On Stop sections exactly.
-```
-
-**Gemini CLI / OpenCode**: append to system prompt or rules file:
-```
-Read .swarm/BOOTSTRAP.md before starting any task and follow the SwarmCity protocol.
-```
-
-Full templates in [`docs/PLATFORM_SETUP.md`](docs/PLATFORM_SETUP.md).
-
----
-
-## Git Topology
-
-Make your organization folder a thin git repo tracking only `.swarm/`:
-
-```bash
-cd your-org-folder/
-git init
-cat > .gitignore << 'EOF'
-*
-!.swarm/
-!.swarm/**
-!.gitignore
-EOF
-git add . && git commit -m "chore: initialize SwarmCity coordination layer"
-```
-
-Division repos stay independent — no submodules needed.
-
----
-
-## CI/CD Drift Check
-
-A GitHub Actions workflow calls an LLM (Bedrock, OpenAI, or Anthropic API) to verify
-that `.swarm/state.md` and `queue.md` accurately reflect recent code changes, posting
-a PR comment if drift is detected.
-
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) section 10 for the full workflow spec.
-
----
-
-## Project Structure
-
-```
-swarm-city/
-├── README.md                        # This file
-├── src/
-│   ├── swarm_city/                  # The `swarm` CLI logic
-│   │   ├── models.py                # Data models (WorkItem, SwarmPaths, etc.)
-│   │   ├── operations.py            # File read/write operations
-│   │   └── cli.py                   # Click CLI commands
-│   └── swarm_city_mcp/              # The SwarmCity MCP server
-│       └── server.py                # MCP server (swarm_* tools)
-├── docs/
-│   ├── ARCHITECTURE.md              # Full architecture + implementation phases
-│   ├── PLATFORM_SETUP.md            # Agent platform shim templates
-│   └── DRIFT_CHECK_SETUP.md         # CI/CD setup guide
-└── pyproject.toml                   # Unified build configuration
-```
-
----
-
-## Relationship to Gastown
-
-Gastown is the conceptual architecture for multi-agent orchestration — the vision of
-multiple AI agents and human developers working asynchronously with stigmergic
-coordination. SwarmCity is the minimal reference implementation: no servers, no
-binaries, no proprietary sync, just markdown and git.
+[Full credits and citations →](CREDITS.md)
 
 ---
 
 ## License
 
-MIT
+MIT — [github.com/MikeHLee/SwarmCity](https://github.com/MikeHLee/SwarmCity)
