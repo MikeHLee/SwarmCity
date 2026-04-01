@@ -1,9 +1,9 @@
-"""SwarmCity Bedrock client — config I/O and AWS client factory.
+"""dot_swarm Bedrock client — config I/O and AWS client factory.
 
 Credentials are NEVER stored here. boto3's credential chain is used:
   env vars (AWS_ACCESS_KEY_ID, etc.) → ~/.aws/credentials → IAM role
 
-Install: pip install swarm-city[ai]
+Install: pip install dot-swarm[ai]
 """
 
 from __future__ import annotations

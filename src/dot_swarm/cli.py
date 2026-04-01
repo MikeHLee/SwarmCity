@@ -1,4 +1,4 @@
-"""SwarmCity CLI — `swarm` command."""
+"""dot_swarm CLI — `swarm` command."""
 
 from __future__ import annotations
 
@@ -14,7 +14,8 @@ from .models import ItemState, Priority, SwarmPaths
 from .operations import (
     add_item, append_memory, audit, block_item, claim_item, done_item,
     next_item_id, partial_item, read_queue, read_state, write_state,
-    _division_code_from_paths,
+    _division_code_from_paths, discover_divisions, find_parent_paths,
+    get_alignment, get_colony_summary,
 )
 
 
@@ -41,7 +42,7 @@ def _default_agent() -> str:
 @click.version_option("0.2.0")
 @click.pass_context
 def cli(ctx: click.Context, path: str) -> None:
-    """SwarmCity — markdown-native agent orchestration.
+    """dot_swarm — markdown-native agent orchestration.
 
     Reads and writes .swarm/ directories in the current working directory (or
     specified --path). All state lives in plain markdown files — git is the
@@ -52,6 +53,8 @@ def cli(ctx: click.Context, path: str) -> None:
       swarm status      Show current state
       swarm claim ID    Claim a work item
       swarm done ID     Mark item complete
+      swarm ascend      Check alignment with parent division
+      swarm descend     Check alignment with sub-divisions
     """
     ctx.ensure_object(dict)
     ctx.obj["path"] = path
@@ -101,7 +104,7 @@ def init(ctx: click.Context, level: str | None, division_code: str | None,
 
     # BOOTSTRAP.md
     _create_if_missing(swarm_dir / "BOOTSTRAP.md",
-        f"# SwarmCity Bootstrap — {name}\n\n"
+        f"# dot_swarm Bootstrap — {name}\n\n"
         "See `oasis-x/.swarm/BOOTSTRAP.md` for the full protocol.\n\n"
         "Quick reference:\n"
         "1. Read context.md → state.md → queue.md\n"
@@ -338,7 +341,7 @@ def handoff(ctx: click.Context, fmt: str) -> None:
     now = datetime.utcnow().strftime("%Y-%m-%dT%H:%MZ")
 
     lines = [
-        f"# SwarmCity Handoff — {name} — {now}",
+        f"# dot_swarm Handoff — {name} — {now}",
         "",
         "## Current State",
         f"Focus: {state.get('Current focus', '(not set)')}",
@@ -382,29 +385,7 @@ def explore(ctx: click.Context, depth: int) -> None:
     root_path = Path(ctx.obj["path"]).resolve()
     click.echo(f"\nExploring colony heartbeat in: {root_path}\n")
 
-    # Discover divisions
-    divisions: list[tuple[Path, SwarmPaths]] = []
-    
-    # 1. Check root
-    root_paths = SwarmPaths.find(root_path)
-    if root_paths:
-        divisions.append((root_path, root_paths))
-    
-    # 2. Check subdirectories up to depth
-    for p in root_path.glob("*/.swarm"):
-        div_path = p.parent
-        if div_path == root_path:
-            continue
-        paths = SwarmPaths.find(div_path)
-        if paths:
-            divisions.append((div_path, paths))
-    
-    if depth > 1:
-        for p in root_path.glob("*/*/.swarm"):
-            div_path = p.parent
-            paths = SwarmPaths.find(div_path)
-            if paths and (div_path, paths) not in divisions:
-                divisions.append((div_path, paths))
+    divisions = discover_divisions(root_path, depth=depth)
 
     if not divisions:
         click.echo("No .swarm/ directories found in this subtree.")
@@ -414,7 +395,7 @@ def explore(ctx: click.Context, depth: int) -> None:
     click.echo(f"{'Division':20} | {'Last Touched':18} | {'Current Focus'}")
     click.echo(f"{'─' * 20}─┼─{'─' * 18}─┼─{'─' * 40}")
 
-    for path, paths in sorted(divisions, key=lambda x: x[0].name):
+    for path, paths in divisions:
         try:
             state = read_state(paths)
             active, pending, _ = read_queue(paths)
@@ -449,6 +430,149 @@ def explore(ctx: click.Context, depth: int) -> None:
 
     click.echo(f"\nFound {len(divisions)} divisions.")
     click.echo("Run 'swarm status --path <division>' for deep dive into any node.\n")
+
+
+# ---------------------------------------------------------------------------
+# swarm ascend / descend (alignment)
+# ---------------------------------------------------------------------------
+
+@cli.command(name="ascend")
+@click.pass_context
+def ascend(ctx: click.Context) -> None:
+    """Check alignment with the parent division."""
+    local_paths = _get_paths(ctx.obj["path"])
+    parent_paths = find_parent_paths(local_paths)
+
+    if not parent_paths:
+        click.echo("No parent division found above this directory.")
+        return
+
+    local_name = local_paths.root.parent.name
+    parent_name = parent_paths.root.parent.name
+    click.echo(f"\nChecking alignment: {local_name} → {parent_name}\n")
+
+    alignment = get_alignment(local_paths, parent_paths)
+
+    if not alignment:
+        click.echo("No explicit work item relations found with parent division.")
+    else:
+        click.echo(f"{'Local Item':20} | {'Relationship':15} | {'Parent Item'}")
+        click.echo(f"{'─' * 20}─┼─{'─' * 15}─┼─{'─' * 40}")
+        for local, parent in alignment:
+            rel = "depends on" if parent.id in local.depends else "references"
+            click.echo(f"{local.id:20} | {rel:15} | {parent.id}: {parent.description[:35]}")
+
+    click.echo("")
+
+
+@cli.command(name="descend")
+@click.pass_context
+def descend(ctx: click.Context) -> None:
+    """Check alignment with sub-divisions."""
+    local_paths = _get_paths(ctx.obj["path"])
+    root_path = local_paths.root.parent
+    
+    # Depth 1 to see immediate children
+    divisions = discover_divisions(root_path, depth=1)
+    # Filter out local_paths itself
+    children = [(p, ps) for p, ps in divisions if p != root_path]
+
+    if not children:
+        click.echo("No sub-divisions found in immediate subdirectories.")
+        return
+
+    click.echo(f"\nChecking alignment: {root_path.name} ↴ {len(children)} children\n")
+
+    found_any = False
+    for child_path, child_paths in children:
+        alignment = get_alignment(local_paths, child_paths)
+        if alignment:
+            found_any = True
+            click.echo(f"Sub-division: {child_path.name}")
+            click.echo(f"{'Local Item':20} | {'Relationship':15} | {'Child Item'}")
+            click.echo(f"{'─' * 20}─┼─{'─' * 15}─┼─{'─' * 40}")
+            for local, child in alignment:
+                rel = "referenced by" if local.id in child.refs else "parent of"
+                if local.id in child.depends:
+                    rel = "required by"
+                click.echo(f"{local.id:20} | {rel:15} | {child.id}: {child.description[:35]}")
+            click.echo("")
+
+    if not found_any:
+        click.echo("No explicit work item relations found with sub-divisions.")
+        click.echo("Sub-divisions present: " + ", ".join(p.name for p, _ in children))
+
+    click.echo("")
+
+
+# ---------------------------------------------------------------------------
+# swarm gui
+# ---------------------------------------------------------------------------
+
+@cli.command(name="gui")
+@click.option("--port", default=8000, help="Port to run the dashboard on (default: 8000)")
+@click.option("--open", "open_browser", is_flag=True, default=False, help="Open browser automatically")
+@click.pass_context
+def gui(ctx: click.Context, port: int, open_browser: bool) -> None:
+    """Start the visual Swarm Trail dashboard."""
+    import http.server
+    import socketserver
+    import webbrowser
+    from threading import Thread
+
+    root_path = Path(ctx.obj["path"]).resolve()
+    template_path = Path(__file__).parent / "templates" / "gui.html"
+    
+    if not template_path.exists():
+        click.echo(f"Error: GUI template not found at {template_path}", err=True)
+        return
+
+    class SwarmHandler(http.server.SimpleHTTPRequestHandler):
+        def do_GET(self):
+            if self.path == "/api/state.json":
+                try:
+                    data = get_colony_summary(root_path)
+                    self.send_response(200)
+                    self.send_header("Content-type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps(data).encode())
+                except Exception as e:
+                    self.send_error(500, str(e))
+            elif self.path == "/" or self.path == "/index.html":
+                self.send_response(200)
+                self.send_header("Content-type", "text/html")
+                self.end_headers()
+                self.wfile.write(template_path.read_bytes())
+            elif self.path == "/logo.png":
+                logo = root_path / "logo.png"
+                if not logo.exists():
+                    logo = Path(__file__).parent.parent.parent / "logo.png"
+                if logo.exists():
+                    self.send_response(200)
+                    self.send_header("Content-type", "image/png")
+                    self.end_headers()
+                    self.wfile.write(logo.read_bytes())
+                else:
+                    self.send_error(404)
+            else:
+                super().do_GET()
+
+        def log_message(self, format, *args):
+            # Silence standard logging to keep CLI clean
+            pass
+
+    click.echo(f"\nStarting dot_swarm GUI on http://localhost:{port}")
+    click.echo("Press Ctrl+C to stop.\n")
+    
+    if open_browser:
+        Thread(target=lambda: webbrowser.open(f"http://localhost:{port}")).start()
+
+    with socketserver.TCPServer(("", port), SwarmHandler) as httpd:
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            click.echo("\nStopping GUI...")
+            httpd.shutdown()
 
 
 # ---------------------------------------------------------------------------
@@ -506,7 +630,7 @@ def report_cmd(ctx: click.Context, out_path: str | None, only_section: str,
 
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     lines: list[str] = [
-        f"# SwarmCity Colony Report",
+        f"# dot_swarm Colony Report",
         f"",
         f"**Generated**: {now}  ",
         f"**Root**: `{root_path}`  ",
@@ -565,7 +689,7 @@ def report_cmd(ctx: click.Context, out_path: str | None, only_section: str,
     lines += [
         f"**Colony totals**: {total_active} active · {total_pending} pending",
         f"",
-        f"_Generated by [SwarmCity](https://github.com/MikeHLee/SwarmCity)_",
+        f"_Generated by [dot_swarm](https://github.com/MikeHLee/dot_swarm)_",
     ]
 
     output = "\n".join(lines)
@@ -754,7 +878,7 @@ def configure() -> None:
     _INTERFACES = ["bedrock", "claude", "gemini", "opencode"]
     _DETECTED   = [i for i in ["claude", "gemini", "opencode"] if shutil.which(i)]
 
-    click.echo("SwarmCity AI interface configuration\n")
+    click.echo("dot_swarm AI interface configuration\n")
     click.echo("Available interfaces:")
     for iface in _INTERFACES:
         detected = " (detected)" if shutil.which(iface) or iface == "bedrock" else ""
@@ -770,7 +894,7 @@ def configure() -> None:
         try:
             import boto3  # noqa: F401
         except ImportError:
-            click.echo("\nError: boto3 not installed. Run: pip install 'swarm-city[ai]'", err=True)
+            click.echo("\nError: boto3 not installed. Run: pip install 'dot-swarm[ai]'", err=True)
             raise SystemExit(1)
 
         click.echo("\nBedrock configuration")
@@ -869,7 +993,7 @@ def ai_cmd(ctx: click.Context, instruction: str, yes: bool, agent_id: str | None
             try:
                 import boto3  # noqa: F401
             except ImportError:
-                click.echo("Error: boto3 not installed. Run: pip install 'swarm-city[ai]'", err=True)
+                click.echo("Error: boto3 not installed. Run: pip install 'dot-swarm[ai]'", err=True)
                 raise SystemExit(1)
             client = _bedrock.get_bedrock_client(cfg["region"])
             result = _ai.invoke_ai(client, cfg["model"], user_msg)
@@ -1006,7 +1130,7 @@ def session_cmd(ctx: click.Context, interface: str, prompt: str | None) -> None:
         # Single non-interactive turn: inject context + prompt
         context = _ai.build_context_bundle(paths)
         seeded  = (
-            f"SwarmCity context for {div_root.name}:\n\n{context}"
+            f"dot_swarm context for {div_root.name}:\n\n{context}"
             f"\n\n---\n\nUser: {prompt}"
         )
         flags = _CLI_NONINTERACTIVE_FLAGS.get(interface, ["-p"])
@@ -1017,7 +1141,7 @@ def session_cmd(ctx: click.Context, interface: str, prompt: str | None) -> None:
             context   = _ai.build_context_bundle(paths)
             ctx_file  = paths.root / "CURRENT_SESSION.md"
             ctx_file.write_text(
-                f"# SwarmCity Session Context — {div_root.name}\n\n"
+                f"# dot_swarm Session Context — {div_root.name}\n\n"
                 f"Read this file to understand the current state, then assist the user.\n\n"
                 f"{context}\n"
             )
@@ -1051,7 +1175,7 @@ def setup_drift_check(
     commit: bool,
     model: str | None,
 ) -> None:
-    """Install the SwarmCity drift-check GitHub Actions workflow.
+    """Install the dot_swarm drift-check GitHub Actions workflow.
 
     Copies swarm-drift-check.yml to .github/workflows/, verifies AWS secrets
     exist via gh CLI, and optionally commits + pushes.
@@ -1129,7 +1253,7 @@ def setup_drift_check(
         wf_rel = str(workflow_dest.relative_to(repo_root))
         subprocess.run(["git", "add", wf_rel], cwd=repo_root, check=True)
         subprocess.run(
-            ["git", "commit", "-m", "chore: add SwarmCity drift-check workflow\n\nAuto-installed via `swarm setup-drift-check`"],
+            ["git", "commit", "-m", "chore: add dot_swarm drift-check workflow\n\nAuto-installed via `swarm setup-drift-check`"],
             cwd=repo_root, check=True,
         )
         subprocess.run(["git", "push"], cwd=repo_root, check=True)
@@ -1137,7 +1261,7 @@ def setup_drift_check(
     else:
         click.echo(f"\n  Workflow written. To activate:\n")
         click.echo(f"    git add .github/workflows/swarm-drift-check.yml")
-        click.echo(f"    git commit -m 'chore: add SwarmCity drift-check workflow'")
+        click.echo(f"    git commit -m 'chore: add dot_swarm drift-check workflow'")
         click.echo(f"    git push")
 
     click.echo(f"\nDone. The drift check will run on every merge to dev/prod in {repo}.")
@@ -1159,7 +1283,7 @@ def _install_drift_check_workflow(repo_root: Path) -> None:
     # Try to load the bundled template
     try:
         template_path = (
-            Path(__file__).parent.parent.parent.parent.parent  # swarm-city root
+            Path(__file__).parent.parent.parent.parent.parent  # dot_swarm root
             / ".github" / "workflows" / "swarm-drift-check.yml"
         )
         if template_path.exists():
@@ -1172,7 +1296,7 @@ def _install_drift_check_workflow(repo_root: Path) -> None:
 
     click.echo(
         "  Note: drift-check workflow not found at package root. "
-        "Copy swarm-city/.github/workflows/swarm-drift-check.yml manually."
+        "Copy dot_swarm/.github/workflows/swarm-drift-check.yml manually."
     )
 
 

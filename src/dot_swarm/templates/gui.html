@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>dot_swarm Dashboard</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fafc; }
+        .mono { font-family: 'Fira Code', monospace; }
+        .trail-line { border-left: 2px solid #334155; margin-left: 0.75rem; padding-left: 1.5rem; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        const Badge = ({ children, color = "blue" }) => {
+            const colors = {
+                blue: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+                green: "bg-green-500/10 text-green-400 border-green-500/20",
+                yellow: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
+                red: "bg-red-500/10 text-red-400 border-red-500/20",
+                gray: "bg-slate-500/10 text-slate-400 border-slate-500/20",
+                purple: "bg-purple-500/10 text-purple-400 border-purple-500/20",
+            };
+            return (
+                <span className={`px-2 py-0.5 rounded border text-xs font-medium ${colors[color]}`}>
+                    {children}
+                </span>
+            );
+        };
+
+        const Card = ({ children, className = "" }) => (
+            <div className={`bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden ${className}`}>
+                {children}
+            </div>
+        );
+
+        const DivisionCard = ({ division, onSelect }) => {
+            const activeCount = division.queue?.active?.length || 0;
+            const pendingCount = division.queue?.pending?.length || 0;
+            const lastUpdate = division.state?.["Last touched"] || "unknown";
+            
+            return (
+                <Card className="hover:border-blue-500/50 transition-colors cursor-pointer group" >
+                    <div className="p-5" onClick={() => onSelect(division)}>
+                        <div className="flex justify-between items-start mb-4">
+                            <h3 className="text-lg font-semibold flex items-center gap-2">
+                                {division.is_org && <span title="Organization Level">★</span>}
+                                {division.name}
+                            </h3>
+                            <Badge color={activeCount > 0 ? "green" : "gray"}>
+                                {activeCount} active
+                            </Badge>
+                        </div>
+                        <p className="text-slate-400 text-sm mb-4 line-clamp-2 min-h-[2.5rem]">
+                            {division.state?.["Current focus"] || "(no focus set)"}
+                        </p>
+                        <div className="flex justify-between items-center text-xs text-slate-500">
+                            <span className="mono">{lastUpdate.split(' by ')[0].replace('T', ' ').slice(0, 16)}</span>
+                            <span>{pendingCount} pending</span>
+                        </div>
+                    </div>
+                </Card>
+            );
+        };
+
+        const ItemRow = ({ item, divisionName }) => {
+            const priorityColors = {
+                critical: "red",
+                high: "yellow",
+                medium: "blue",
+                low: "gray"
+            };
+            return (
+                <div className="p-3 border-b border-slate-700/30 last:border-0 hover:bg-slate-700/20 flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <span className="mono text-xs text-slate-400 w-20">{item.id}</span>
+                        <span className="text-sm">{item.description}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        {divisionName && <Badge color="purple">{divisionName}</Badge>}
+                        <Badge color={priorityColors[item.priority]}>{item.priority}</Badge>
+                    </div>
+                </div>
+            );
+        };
+
+        const TrailHistory = ({ history }) => (
+            <div className="space-y-6">
+                {history.map((commit, i) => (
+                    <div key={commit.sha} className="relative">
+                        <div className="flex gap-4">
+                            <div className="flex flex-col items-center">
+                                <div className="w-3 h-3 rounded-full bg-blue-500 mt-1.5 shadow-[0_0_8px_rgba(59,130,246,0.5)]"></div>
+                                {i !== history.length - 1 && <div className="w-0.5 flex-grow bg-slate-700 my-1"></div>}
+                            </div>
+                            <div className="pb-6">
+                                <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
+                                    <span className="font-semibold text-slate-300">{commit.author}</span>
+                                    <span>•</span>
+                                    <span className="mono">{commit.timestamp.replace('T', ' ').slice(0, 16)}</span>
+                                    <span>•</span>
+                                    <span className="mono text-slate-600">{commit.sha.slice(0, 7)}</span>
+                                </div>
+                                <div className="text-sm text-slate-300 bg-slate-800/30 p-3 rounded-lg border border-slate-700/50">
+                                    {commit.message}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        );
+
+        const App = () => {
+            const [data, setData] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [selectedDiv, setSelectedDiv] = useState(null);
+            const [tab, setTab] = useState("overview");
+
+            useEffect(() => {
+                fetch('/api/state.json')
+                    .then(res => res.json())
+                    .then(d => {
+                        setData(d);
+                        setLoading(false);
+                    })
+                    .catch(e => console.error("Fetch failed", e));
+            }, []);
+
+            const allItems = useMemo(() => {
+                if (!data) return [];
+                const items = [];
+                data.divisions.forEach(div => {
+                    if (div.queue) {
+                        div.queue.active.forEach(i => items.push({ ...i, divName: div.name, status: "active" }));
+                        div.queue.pending.forEach(i => items.push({ ...i, divName: div.name, status: "pending" }));
+                    }
+                });
+                return items.sort((a, b) => {
+                    const p = { critical: 0, high: 1, medium: 2, low: 3 };
+                    return p[a.priority] - p[b.priority];
+                });
+            }, [data]);
+
+            const globalHistory = useMemo(() => {
+                if (!data) return [];
+                const h = [];
+                data.divisions.forEach(div => {
+                    if (div.history) {
+                        div.history.forEach(c => h.push({ ...c, divName: div.name }));
+                    }
+                });
+                return h.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 30);
+            }, [data]);
+
+            if (loading) return (
+                <div className="flex h-screen items-center justify-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+                </div>
+            );
+
+            return (
+                <div className="max-w-7xl mx-auto px-6 py-8">
+                    <header className="flex justify-between items-end mb-12">
+                        <div>
+                            <div className="flex items-center gap-3 mb-2">
+                                <img src="/logo.png" className="w-10 h-10 opacity-80" onError={e => e.target.style.display='none'} />
+                                <h1 className="text-3xl font-bold tracking-tight">dot_swarm</h1>
+                            </div>
+                            <p className="text-slate-400 mono text-sm">Colony: {data.root.split('/').pop()}</p>
+                        </div>
+                        <div className="flex bg-slate-800/50 p-1 rounded-lg border border-slate-700/50">
+                            {["overview", "items", "history"].map(t => (
+                                <button 
+                                    key={t}
+                                    onClick={() => setTab(t)}
+                                    className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${tab === t ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
+                                >
+                                    {t.charAt(0).toUpperCase() + t.slice(1)}
+                                </button>
+                            ))}
+                        </div>
+                    </header>
+
+                    {tab === "overview" && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {data.divisions.map(div => (
+                                <DivisionCard 
+                                    key={div.name} 
+                                    division={div} 
+                                    onSelect={(d) => { setSelectedDiv(d); setTab("detail"); }} 
+                                />
+                            ))}
+                        </div>
+                    )}
+
+                    {tab === "items" && (
+                        <Card className="max-w-4xl mx-auto">
+                            <div className="p-4 border-b border-slate-700 bg-slate-800/50 flex justify-between items-center">
+                                <h2 className="font-semibold">Global Priority Queue</h2>
+                                <span className="text-xs text-slate-500">{allItems.length} items total</span>
+                            </div>
+                            <div>
+                                {allItems.map(item => (
+                                    <ItemRow key={`${item.divName}-${item.id}`} item={item} divisionName={item.divName} />
+                                ))}
+                            </div>
+                        </Card>
+                    )}
+
+                    {tab === "history" && (
+                        <div className="max-w-2xl mx-auto pt-4">
+                            <TrailHistory history={globalHistory} />
+                        </div>
+                    )}
+
+                    {tab === "detail" && selectedDiv && (
+                        <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-300">
+                            <button onClick={() => setTab("overview")} className="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1 mb-4">
+                                ← Back to Overview
+                            </button>
+                            
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <h2 className="text-3xl font-bold mb-2">{selectedDiv.name}</h2>
+                                    <p className="text-slate-400 mono text-xs">{selectedDiv.path}</p>
+                                </div>
+                                <Badge color={selectedDiv.is_org ? "purple" : "blue"}>
+                                    {selectedDiv.is_org ? "Organization" : "Division"}
+                                </Badge>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                                <div className="md:col-span-2 space-y-8">
+                                    <section>
+                                        <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">Current Focus</h3>
+                                        <div className="bg-blue-500/5 border border-blue-500/20 p-6 rounded-xl text-lg text-blue-100 italic">
+                                            "{selectedDiv.state?.["Current focus"] || "No focus set"}"
+                                        </div>
+                                    </section>
+
+                                    <section>
+                                        <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">Active Items</h3>
+                                        <Card>
+                                            {selectedDiv.queue?.active?.length > 0 ? (
+                                                selectedDiv.queue.active.map(i => <ItemRow key={i.id} item={i} />)
+                                            ) : (
+                                                <div className="p-8 text-center text-slate-500 text-sm">No active items</div>
+                                            )}
+                                        </Card>
+                                    </section>
+
+                                    <section>
+                                        <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">Pending Queue</h3>
+                                        <Card>
+                                            {selectedDiv.queue?.pending?.length > 0 ? (
+                                                selectedDiv.queue.pending.map(i => <ItemRow key={i.id} item={i} />)
+                                            ) : (
+                                                <div className="p-8 text-center text-slate-500 text-sm">Queue empty</div>
+                                            )}
+                                        </Card>
+                                    </section>
+                                </div>
+
+                                <div className="space-y-8">
+                                    <section>
+                                        <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">Pheromone Trail</h3>
+                                        {selectedDiv.history ? (
+                                            <TrailHistory history={selectedDiv.history.slice(0, 10)} />
+                                        ) : (
+                                            <p className="text-slate-500 text-sm">No history found</p>
+                                        )}
+                                    </section>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

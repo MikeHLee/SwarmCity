@@ -1,4 +1,4 @@
-"""SwarmCity data models.
+"""dot_swarm data models.
 
 All models are plain dataclasses — no ORM, no database. State lives on disk as markdown.
 """

@@ -1,4 +1,4 @@
-"""Tests for swarm_city.operations — core read/write/lifecycle logic."""
+"""Tests for dot_swarm.operations — core read/write/lifecycle logic."""
 from __future__ import annotations
 
 import tempfile
@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from swarm_city.models import Priority, SwarmPaths, WorkItem
-from swarm_city.operations import (
+from dot_swarm.models import Priority, SwarmPaths, WorkItem
+from dot_swarm.operations import (
     add_item,
     append_memory,
     audit,

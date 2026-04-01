@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "swarm-city"
+name = "dot-swarm"
 version = "0.3.0"
-description = "SwarmCity — markdown-native agent orchestration for multi-repo organizations"
+description = "dot_swarm — markdown-native agent orchestration for multi-repo organizations"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -26,10 +26,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/MikeHLee/SwarmCity"
-Documentation = "https://mikehlee.github.io/SwarmCity/"
-Repository = "https://github.com/MikeHLee/SwarmCity.git"
-Issues = "https://github.com/MikeHLee/SwarmCity/issues"
+Homepage = "https://github.com/MikeHLee/dot_swarm"
+Documentation = "https://mikehlee.github.io/dot_swarm/"
+Repository = "https://github.com/MikeHLee/dot_swarm.git"
+Issues = "https://github.com/MikeHLee/dot_swarm/issues"
 
 [project.optional-dependencies]
 ai = [
@@ -37,8 +37,8 @@ ai = [
 ]
 
 [project.scripts]
-swarm = "swarm_city.cli:cli"
-swarm-city-mcp = "swarm_city_mcp.server:main"
+swarm = "dot_swarm.cli:cli"
+dot-swarm-mcp = "dot_swarm_mcp.server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

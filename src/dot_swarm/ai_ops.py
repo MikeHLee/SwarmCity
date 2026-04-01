@@ -1,4 +1,4 @@
-"""SwarmCity AI operations — context bundling, Bedrock invocation, op dispatch.
+"""dot_swarm AI operations — context bundling, Bedrock invocation, op dispatch.
 
 This module contains no boto3 imports at the top level so the base CLI
 remains importable without the [ai] extra installed.
@@ -21,7 +21,7 @@ from .operations import (
 # ---------------------------------------------------------------------------
 
 SYSTEM_PROMPT = """\
-You are a SwarmCity assistant. SwarmCity is a git-native agent coordination system that stores
+You are a dot_swarm assistant. dot_swarm is a git-native agent coordination system that stores
 all state in markdown files inside a .swarm/ directory.
 
 You will receive:

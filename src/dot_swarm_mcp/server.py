@@ -1,4 +1,4 @@
-"""SwarmCity MCP Server.
+"""dot_swarm MCP Server.
 
 Exposes .swarm/ directory operations as MCP tools. Agents on any MCP-compatible
 platform (Claude Code, Windsurf, Cursor, etc.) can call these tools to read and
@@ -9,9 +9,9 @@ Transport: stdio (default) — suitable for local MCP server configs.
 Configure in Claude Code (~/.claude/settings.json):
     {
       "mcpServers": {
-        "swarm-city": {
+        "dot-swarm": {
           "command": "python",
-          "args": ["-m", "swarm_city_mcp"],
+          "args": ["-m", "dot_swarm_mcp"],
           "env": { "SWARM_ROOT": "/path/to/oasis-x" }
         }
       }
@@ -28,8 +28,8 @@ import mcp.server.stdio
 import mcp.types as types
 from mcp.server import Server
 
-from swarm_city.models import Priority, SwarmPaths
-from swarm_city.operations import (
+from dot_swarm.models import Priority, SwarmPaths
+from dot_swarm.operations import (
     add_item,
     append_memory,
     audit,
@@ -41,7 +41,7 @@ from swarm_city.operations import (
     _division_code_from_paths,
 )
 
-server = Server("swarm-city")
+server = Server("dot-swarm")
 
 # ---------------------------------------------------------------------------
 # Path resolution
@@ -367,7 +367,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
             name_str = paths.root.parent.name
             now = datetime.utcnow().strftime("%Y-%m-%dT%H:%MZ")
             lines = [
-                f"# SwarmCity Handoff — {name_str} — {now}", "",
+                f"# dot_swarm Handoff — {name_str} — {now}", "",
                 "## Current State",
                 f"Focus: {state.get('Current focus', '(not set)')}",
             ]

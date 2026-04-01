@@ -1,4 +1,4 @@
-"""SwarmCity core file operations.
+"""dot_swarm core file operations.
 
 All reads and writes go through these functions. Write operations are atomic
 (write to temp file, then rename). File locking is used for concurrent safety.
@@ -7,12 +7,14 @@ All reads and writes go through these functions. Write operations are atomic
 from __future__ import annotations
 
 import fcntl
+import json
 import os
 import re
+import subprocess
 import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Iterator
+from typing import Any, Iterator
 
 from .models import (
     ItemState, Priority, SwarmPaths, SwarmState, WorkItem,
@@ -449,7 +451,7 @@ _DIVISION_CODE_MAP: dict[str, str] = {
     "oasis-welcome": "WEB",
     "oasis-cloud-wiki": "WIKI",
     "oasis-records": "REC",
-    "swarm-city": "SWC",
+    "dot-swarm": "SWC",
 }
 
 
@@ -457,6 +459,162 @@ def _division_code_from_paths(paths: SwarmPaths) -> str:
     """Infer division code from directory name."""
     name = paths.root.parent.name
     return _DIVISION_CODE_MAP.get(name, name.upper()[:4])
+
+
+def discover_divisions(root_path: Path, depth: int = 2) -> list[tuple[Path, SwarmPaths]]:
+    """Recursively find all .swarm/ directories in the subtree."""
+    divisions: list[tuple[Path, SwarmPaths]] = []
+
+    # 1. Check root
+    root_paths = SwarmPaths.find(root_path)
+    if root_paths:
+        divisions.append((root_path, root_paths))
+
+    # 2. Check subdirectories up to depth
+    patterns = ["*/.swarm"]
+    if depth > 1:
+        patterns.append("*/*/.swarm")
+    if depth > 2:
+        patterns.append("*/*/*/.swarm")
+
+    for pattern in patterns:
+        for p in root_path.glob(pattern):
+            div_path = p.parent
+            if div_path == root_path:
+                continue
+            paths = SwarmPaths.from_swarm_dir(p)
+            if paths and (div_path, paths) not in divisions:
+                divisions.append((div_path, paths))
+
+    return sorted(divisions, key=lambda x: x[0].name)
+
+
+def find_parent_paths(current_paths: SwarmPaths) -> SwarmPaths | None:
+    """Find the next .swarm/ directory above the current one."""
+    # Start looking from the parent of the current division root
+    start_search = current_paths.root.parent.parent
+    if not start_search or start_search == current_paths.root.parent:
+        return None
+    return SwarmPaths.find(start_search)
+
+
+def get_alignment(
+    local_paths: SwarmPaths, other_paths: SwarmPaths
+) -> list[tuple[WorkItem, WorkItem]]:
+    """Find pairs of items that reference each other across divisions."""
+    local_active, local_pending, local_done = read_queue(local_paths)
+    other_active, other_pending, other_done = read_queue(other_paths)
+
+    local_items = local_active + local_pending + local_done
+    other_items = other_active + other_pending + other_done
+
+    local_code = _division_code_from_paths(local_paths)
+    other_code = _division_code_from_paths(other_paths)
+
+    aligned: list[tuple[WorkItem, WorkItem]] = []
+
+    for l_item in local_items:
+        # Check if local item refs other division
+        for ref in l_item.refs + l_item.depends:
+            if ref.startswith(other_code + "-"):
+                # Find the target item in other division
+                target = next((i for i in other_items if i.id == ref), None)
+                if target:
+                    aligned.append((l_item, target))
+
+    for o_item in other_items:
+        # Check if other item refs local division
+        for ref in o_item.refs + o_item.depends:
+            if ref.startswith(local_code + "-"):
+                # Find the target item in local division
+                target = next((i for i in local_items if i.id == ref), None)
+                if target and (target, o_item) not in aligned:
+                    aligned.append((target, o_item))
+
+    return aligned
+
+
+def get_git_history(path: Path, limit: int = 20) -> list[dict[str, Any]]:
+    """Get recent git history for the .swarm/ directory at path."""
+    swarm_dir = path / ".swarm"
+    if not swarm_dir.exists():
+        return []
+
+    try:
+        # Get last N commits affecting .swarm/
+        cmd = [
+            "git", "log", "-n", str(limit),
+            "--pretty=format:%H|%at|%an|%s",
+            "--", str(swarm_dir)
+        ]
+        result = subprocess.run(
+            cmd,
+            cwd=path,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        history = []
+        for line in result.stdout.splitlines():
+            if not line:
+                continue
+            sha, ts, author, msg = line.split("|", 3)
+            history.append({
+                "sha": sha,
+                "timestamp": datetime.fromtimestamp(int(ts)).isoformat() + "Z",
+                "author": author,
+                "message": msg
+            })
+        return history
+    except (subprocess.SubprocessError, FileNotFoundError):
+        return []
+
+
+def get_colony_summary(root_path: Path) -> dict[str, Any]:
+    """Aggregate all division data into a JSON-serializable dict."""
+    divisions = discover_divisions(root_path, depth=3)
+    data = {
+        "root": str(root_path),
+        "timestamp": _now_ts(),
+        "divisions": []
+    }
+
+    for div_path, paths in divisions:
+        try:
+            state = read_state(paths)
+            active, pending, done = read_queue(paths)
+            history = get_git_history(div_path)
+
+            div_data = {
+                "name": div_path.name,
+                "path": str(div_path),
+                "is_org": paths.is_org_level(),
+                "state": state,
+                "queue": {
+                    "active": [i.__dict__ for i in active],
+                    "pending": [i.__dict__ for i in pending],
+                    "done": [i.__dict__ for i in done],
+                },
+                "history": history
+            }
+            # Clean up WorkItem dicts for JSON (enums to strings)
+            for section in ["active", "pending", "done"]:
+                for item in div_data["queue"][section]:
+                    item["state"] = item["state"].value
+                    item["priority"] = item["priority"].value
+                    if item["claimed_at"]:
+                        item["claimed_at"] = _fmt_ts(item["claimed_at"])
+                    if item["done_at"]:
+                        item["done_at"] = _fmt_ts(item["done_at"])
+
+            data["divisions"].append(div_data)
+        except Exception as e:
+            data["divisions"].append({
+                "name": div_path.name,
+                "error": str(e)
+            })
+
+    return data
 
 
 def _create_state_template(paths: SwarmPaths) -> None:
