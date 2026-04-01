@@ -1,10 +1,10 @@
 # CLI Reference
 
-`swarm` is installed as a standalone command via `pip install swarm-city`.
+`swarm` is installed as a standalone command via `pip install dot-swarm`.
 
 ```bash
-pip install swarm-city          # base CLI
-pip install 'swarm-city[ai]'    # + AWS Bedrock support (boto3)
+pip install dot-swarm           # base CLI
+pip install 'dot-swarm[ai]'     # + AWS Bedrock support (boto3)
 ```
 
 ---

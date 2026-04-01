@@ -31,9 +31,4 @@ jobs:
           
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          repository-url: https://upload.pypi.org/legacy/
-          # Requires a PyPI API token set in GitHub Secrets
-          # password: ${{ secrets.PYPI_API_TOKEN }}
-          # Recommended: Use Trusted Publishing (OIDC)
-          # See: https://docs.pypi.org/trusted-publishers/
+        # Uses Trusted Publishing (OIDC) — configure at pypi.org/manage/project/dot-swarm/settings/publishing/

@@ -1,10 +1,10 @@
 <div align="center">
-  <img src="logo.png" alt="SwarmCity" width="180" />
-  <h1>SwarmCity</h1>
+  <img src="logo.png" alt="dot_swarm" width="180" />
+  <h1>dot_swatm</h1>
   <p><strong>Minimal, git-native, markdown-first agent orchestration for multi-repo organizations.</strong></p>
 </div>
 
-SwarmCity lets human developers and AI agents (Claude Code, Windsurf, Cursor, Gemini CLI,
+dot_swarm lets human developers and AI agents (Claude Code, Windsurf, Cursor, Gemini CLI,
 OpenCode, and others) coordinate work across multiple repositories without any external
 services, databases, or daemons. All coordination state lives in `.swarm/` directories
 as plain markdown files. Git is the only database.
@@ -24,7 +24,7 @@ platforms. Without coordination:
 Existing solutions (Jira, Linear, GitHub Issues) require web UIs and API credentials.
 Database-backed tools add binary files and server processes to your repo.
 
-**SwarmCity takes a different approach: everything is a markdown file any agent on any
+**dot_swarm takes a different approach: everything is a markdown file any agent on any
 platform can read and write directly.**
 
 ---
@@ -48,7 +48,7 @@ The cost of a central coordinator is not just latency — it is **information ov
 single-point fragility**. A queen who had to consciously route every foraging decision
 would saturate immediately. The colony would slow to the speed of one brain.
 
-SwarmCity applies this directly to software agent fleets:
+dot_swarm applies this directly to software agent fleets:
 
 !!! quote "The core principle"
     Agents that modify filesystem-native projects should leave traces in their
@@ -61,7 +61,7 @@ The `.swarm/` directory *is* the shared medium. `state.md` *is* the pheromone tr
 follow the same protocol, coordination emerges from the environment — no coordination
 service required.
 
-**Signals decay.** Pheromone trails evaporate when not reinforced. SwarmCity reflects
+**Signals decay.** Pheromone trails evaporate when not reinforced. dot_swarm reflects
 this: `swarm audit` flags stale claims, `memory.md` entries are dated, and `state.md`
 timestamps tell any agent exactly how fresh the picture is. Old signals stop misleading
 new workers.
@@ -127,7 +127,7 @@ live at org level with `refs:` pointers in each affected division's queue.
 
 The typical alternative — a shared task server, a Slack bot, a GitHub Issues label
 workflow — introduces a coordination bottleneck that does not exist in the natural
-systems that inspired SwarmCity:
+systems that inspired dot_swarm:
 
 | Central-node approach | Swarm approach |
 |---|---|
@@ -150,10 +150,10 @@ not a coordinator — serializes conflicting writes through timestamps and claim
 ### 1. Install
 
 ```bash
-pip install swarm-city
+pip install dot-swarm
 
 # With AI features (swarm ai, drift check)
-pip install 'swarm-city[ai]'
+pip install 'dot-swarm[ai]'
 ```
 
 ### 2. Initialize
@@ -188,4 +188,4 @@ Theraulaz's *Swarm Intelligence* (1999).
 
 ## License
 
-MIT — [github.com/MikeHLee/SwarmCity](https://github.com/MikeHLee/SwarmCity)
+MIT — [github.com/MikeHLee/dot_swarm](https://github.com/MikeHLee/dot_swarm)
