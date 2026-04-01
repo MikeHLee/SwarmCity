@@ -4,14 +4,9 @@
   <p><strong>Minimal, git-native, markdown-first agent orchestration for multi-repo organizations.</strong></p>
 </div>
 
-dot_swarm lets human developers and AI agents (Claude Code, Windsurf, Cursor, Gemini CLI,
-OpenCode, and others) coordinate work across multiple repositories without any external
-services, databases, or daemons. All coordination state lives in `.swarm/` directories
-as plain markdown files. Git is the only database.
-
 ---
 
-## The Problem
+## Multi-Actor Coordination: A Common Problem
 
 Modern software teams use multiple AI coding agents simultaneously across different
 platforms. Without coordination:
@@ -29,7 +24,7 @@ platform can read and write directly.**
 
 ---
 
-## The Nature Principle
+## Stimergic Systems: Nature's Answer 
 
 In nature, central coordinators are rarely used — and when they exist, they do not
 actively manage coordination.
