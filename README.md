@@ -1,6 +1,6 @@
 <div align="center">
   <img src="logo.png" alt="dot_swarm" width="180" />
-  <h1>dot_swatm</h1>
+  <h1>dot_swarm</h1>
   <p><strong>Minimal, git-native, markdown-first agent orchestration for multi-repo organizations.</strong></p>
 </div>
 
