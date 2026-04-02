@@ -21,7 +21,7 @@ from PIL import Image, ImageDraw
 parser = argparse.ArgumentParser()
 parser.add_argument("--bg", default=None,
                     help="Path to a background image (overrides hex-text default)")
-parser.add_argument("--frames",  type=int, default=60)
+parser.add_argument("--frames",  type=int, default=120)
 parser.add_argument("--fps",     type=int, default=20)
 parser.add_argument("--boids",       type=int,   default=90)
 parser.add_argument("--width",       type=int,   default=640)
@@ -144,8 +144,9 @@ class Boid:
     COH_W         = 0.5    # cohesion: weak, just maintains loose group
     ORBIT_W       = 0.45   # tangential circling around group centre
     WANDER_W      = 1.2    # exploration (fades as inverse of home ramp)
-    HOME_KP       = 5.0    # position return gain  (P term)
+    HOME_KP       = 7.0    # position return gain  (P term)
     HOME_KD       = 3.0    # velocity matching gain (D term) — corrects heading
+    MAX_JERK      = 0.07   # max |da/dt| per step — limits jerk = d²v/dt²
     WANDER_RADIUS = 20.0
     WANDER_DIST   = 28.0
     WANDER_JITTER = 0.4
@@ -161,6 +162,8 @@ class Boid:
         self.wander_theta = random.uniform(0, 2*math.pi)
         self.sprite_phase = random.uniform(0, 100)   # per-boid animation offset
         self._rp = 0.0                               # last return_progress (for update)
+        self.acc_flock_prev   = np.zeros(2)   # jerk-limited flock acc from last step
+        self.acc_flock_smooth = np.zeros(2)   # current smooth flock acc (for update() to save)
 
     def capture_origin(self):
         """Record current state as the loop origin (call after warmup)."""
@@ -200,56 +203,60 @@ class Boid:
             if n == 0: return np.zeros(2)
             return self._limit(desired / n * self.MAX_SPEED - self.vel, self.MAX_FORCE)
 
-        # ── flocking forces (gradually yield to home) ──
+        # smooth_t: 0 at start → 1 at end  |  explore_t: exact complement
+        t         = return_progress
+        smooth_t  = t * t * (3.0 - 2.0 * t)
+        explore_t = 1.0 - smooth_t
         flock_scale = 1.0 - return_progress * 0.6   # 1.0 → 0.4 over animation
 
-        f = np.zeros(2)
+        # ── f_flock: sep + ali + coh + orbit + wander (will be jerk-limited) ──
+        f_flock = np.zeros(2)
 
-        if sc: f += steer(sep / sc) * self.SEP_W * flock_scale
+        if sc: f_flock += steer(sep / sc) * self.SEP_W * flock_scale
         if ac:
             av = ali / ac
             n  = np.linalg.norm(av)
-            f += steer(av / n * self.MAX_SPEED if n else np.zeros(2)) * self.ALI_W * flock_scale
+            f_flock += steer(av / n * self.MAX_SPEED if n else np.zeros(2)) * self.ALI_W * flock_scale
         if cc:
-            f += steer(coh / cc) * self.COH_W * flock_scale
-            # Circling: tangent to the average offset direction
+            f_flock += steer(coh / cc) * self.COH_W * flock_scale
             avg_offset = coh / cc
             tang = np.array([-avg_offset[1], avg_offset[0]])
-            f += steer(tang) * self.ORBIT_W * flock_scale
+            f_flock += steer(tang) * self.ORBIT_W * flock_scale
 
-        # ── explore ↔ home tradeoff (same smoothstep, complementary weights) ──
-        # smooth_t: 0 at start → 1 at end (home wins)
-        # explore_t: 1 at start → 0 at end (exploration wins early)
-        t = return_progress
-        smooth_t  = t * t * (3.0 - 2.0 * t)   # smoothstep
-        explore_t = 1.0 - smooth_t             # exact complement
-
-        # Wander (Reynolds steering toward a jittering point ahead)
         if explore_t > 0:
             self.wander_theta += random.uniform(-self.WANDER_JITTER, self.WANDER_JITTER)
             vn = np.linalg.norm(self.vel)
             if vn > 0:
                 ahead  = self.pos + (self.vel / vn) * self.WANDER_DIST
                 target = ahead + np.array([math.cos(self.wander_theta), math.sin(self.wander_theta)]) * self.WANDER_RADIUS
-                f += steer(self._torus_vec(target)) * self.WANDER_W * explore_t
+                f_flock += steer(self._torus_vec(target)) * self.WANDER_W * explore_t
 
-        # Phase-space PD return: F = Kp * pos_error + Kd * vel_error
-        # Both error signals go through steer() so forces are properly capped.
-        # Kd acting on vel_error steers agent to arrive at origin WITH correct heading.
+        # Jerk constraint on flock forces only
+        da     = f_flock - self.acc_flock_prev
+        da_mag = np.linalg.norm(da)
+        if da_mag > self.MAX_JERK:
+            da = da / da_mag * self.MAX_JERK
+        self.acc_flock_smooth = self.acc_flock_prev + da
+
+        # ── f_home: phase-space PD return ──
+        # Bypasses jerk limiter — smooth_t is already a gradual ramp,
+        # so home force changes slowly by design and always acts at full intended strength.
+        f_home = np.zeros(2)
         if self.origin is not None:
-            pos_err = self._torus_vec(self.origin)          # P: where should I be?
-            vel_err = self.origin_vel - self.vel            # D: how should I be moving?
-            f += steer(pos_err) * self.HOME_KP * smooth_t
-            f += steer(vel_err) * self.HOME_KD * smooth_t
+            pos_err = self._torus_vec(self.origin)
+            vel_err = self.origin_vel - self.vel
+            f_home += steer(pos_err) * self.HOME_KP * smooth_t
+            f_home += steer(vel_err) * self.HOME_KD * smooth_t
 
-        self._rp = return_progress
-        self.acc = f
+        self._rp  = return_progress
+        self.acc  = self.acc_flock_smooth + f_home
 
     def update(self):
         self.vel  = self._limit(self.vel + self.acc, self.MAX_SPEED)
         self.vel *= 0.98                                    # gentle damping
-        self.pos  = (self.pos + self.vel) % np.array([self.w, self.h])
-        self.acc *= 0
+        self.pos      = (self.pos + self.vel) % np.array([self.w, self.h])
+        self.acc_flock_prev = self.acc_flock_smooth.copy()   # save for next jerk calc
+        self.acc           *= 0
 
 # ── Icon boid (orbital vortex) ────────────────────────────────────────────────
 class IconBoid:
