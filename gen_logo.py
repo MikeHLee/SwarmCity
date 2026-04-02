@@ -148,6 +148,7 @@ class Boid:
     HOME_KP       = 7.0    # position return gain  (P term)
     HOME_KD       = 3.0    # velocity matching gain (D term) — corrects heading
     MAX_JERK      = 0.07   # max |da/dt| per step — limits jerk = d²v/dt²
+    MAX_SNAP      = 0.018  # max |d(jerk)/dt| per step — limits snap = d³v/dt³
     WANDER_RADIUS = 20.0
     WANDER_DIST   = 28.0
     WANDER_JITTER = 0.4
@@ -163,10 +164,12 @@ class Boid:
         self.wander_theta = random.uniform(0, 2*math.pi)
         self.sprite_phase = random.uniform(0, 100)   # per-boid animation offset
         self._rp = 0.0                               # last return_progress (for update)
-        self.acc_flock_prev   = np.zeros(2)   # jerk-limited flock acc from last step
-        self.acc_flock_smooth = np.zeros(2)   # current smooth flock acc (for update() to save)
-        self._vel_history  = deque(maxlen=8)   # rolling velocity window
-        self._jerk_history = deque(maxlen=8)   # rolling |Δacc_flock| window
+        self.acc_smooth_prev  = np.zeros(2)   # smooth bundle acc from last step
+        self.acc_smooth       = np.zeros(2)   # current smooth bundle acc
+        self.jerk_vec_prev    = np.zeros(2)   # jerk vector applied last step (for snap)
+        self._jerk_actual     = np.zeros(2)   # jerk applied this step (saved for update)
+        self._vel_history  = deque(maxlen=32)  # rolling velocity window (~1.6 s @ 20 fps)
+        self._jerk_history = deque(maxlen=32)  # rolling |Δacc_flock| window
         self._vel_history.append(self.vel.copy())
 
     def capture_origin(self):
@@ -211,38 +214,49 @@ class Boid:
         t         = return_progress
         smooth_t  = t * t * (3.0 - 2.0 * t)
         explore_t = 1.0 - smooth_t
-        flock_scale = 1.0 - return_progress * 0.6   # 1.0 → 0.4 over animation
+        ali_scale = 1.0 - return_progress * 0.6          # 1.0 → 0.4 over animation
+        # Cohesion + orbit pull toward centre — must reach 0 before home force
+        # dominates, otherwise they cause mid-transit center-clustering.
+        coh_scale = max(0.0, 1.0 - return_progress / 0.65)
 
-        # ── f_flock: sep + ali + coh + orbit + wander (will be jerk-limited) ──
-        f_flock = np.zeros(2)
+        # ── f_sep: separation — bypasses snap+jerk (immediate collision avoidance) ──
+        f_sep = np.zeros(2)
+        if sc: f_sep += steer(sep / sc) * self.SEP_W
 
-        if sc: f_flock += steer(sep / sc) * self.SEP_W * flock_scale
+        # ── f_smooth: ali + coh + orbit + wander — full snap→jerk pipeline ──
+        f_smooth = np.zeros(2)
         if ac:
-            av = ali / ac
-            n  = np.linalg.norm(av)
-            f_flock += steer(av / n * self.MAX_SPEED if n else np.zeros(2)) * self.ALI_W * flock_scale
+            av = ali / ac; n = np.linalg.norm(av)
+            f_smooth += steer(av / n * self.MAX_SPEED if n else np.zeros(2)) * self.ALI_W * ali_scale
         if cc:
-            f_flock += steer(coh / cc) * self.COH_W * flock_scale
+            f_smooth += steer(coh / cc) * self.COH_W * coh_scale
             avg_offset = coh / cc
             tang = np.array([-avg_offset[1], avg_offset[0]])
-            f_flock += steer(tang) * self.ORBIT_W * flock_scale
-
+            f_smooth += steer(tang) * self.ORBIT_W * coh_scale
         if explore_t > 0:
             self.wander_theta += random.uniform(-self.WANDER_JITTER, self.WANDER_JITTER)
             vn = np.linalg.norm(self.vel)
             if vn > 0:
                 ahead  = self.pos + (self.vel / vn) * self.WANDER_DIST
                 target = ahead + np.array([math.cos(self.wander_theta), math.sin(self.wander_theta)]) * self.WANDER_RADIUS
-                f_flock += steer(self._torus_vec(target)) * self.WANDER_W * explore_t
+                f_smooth += steer(self._torus_vec(target)) * self.WANDER_W * explore_t
 
-        # Jerk constraint on flock forces only
-        # Record raw |Δacc| BEFORE clamping for the jerk history
-        da     = f_flock - self.acc_flock_prev
-        da_mag = np.linalg.norm(da)
-        self._jerk_history.append(da_mag)
-        if da_mag > self.MAX_JERK:
-            da = da / da_mag * self.MAX_JERK
-        self.acc_flock_smooth = self.acc_flock_prev + da
+        # Snap constraint (limits d(jerk)/dt): how fast jerk itself can change
+        da_desired = f_smooth - self.acc_smooth_prev
+        snap_vec   = da_desired - self.jerk_vec_prev
+        snap_mag   = np.linalg.norm(snap_vec)
+        if snap_mag > self.MAX_SNAP:
+            snap_vec = snap_vec / snap_mag * self.MAX_SNAP
+        jerk_vec = self.jerk_vec_prev + snap_vec
+
+        # Jerk constraint (limits da/dt): applied after snap shaping
+        jerk_mag = np.linalg.norm(jerk_vec)
+        if jerk_mag > self.MAX_JERK:
+            jerk_vec = jerk_vec / jerk_mag * self.MAX_JERK
+
+        self.acc_smooth    = self.acc_smooth_prev + jerk_vec
+        self._jerk_actual  = jerk_vec.copy()
+        self._jerk_history.append(jerk_mag)
 
         # ── f_home: phase-space PD return ──
         # Bypasses jerk limiter — smooth_t is already a gradual ramp.
@@ -257,20 +271,22 @@ class Boid:
                        if len(self._vel_history) > 1 else self.vel.copy()
             vel_err  = self.origin_vel - vel_avg
             mean_jerk = np.mean(self._jerk_history) if self._jerk_history else 0.0
-            kd_scale  = 1.0 / (1.0 + mean_jerk * 5.0)   # soften when already jerky
-            f_home += steer(pos_err) * self.HOME_KP * smooth_t
+            kp_scale  = 1.0 / (1.0 + mean_jerk * 3.0)   # soften pos pull when turbulent
+            kd_scale  = 1.0 / (1.0 + mean_jerk * 5.0)   # soften vel correction more aggressively
+            f_home += steer(pos_err) * self.HOME_KP * smooth_t * kp_scale
             f_home += steer(vel_err) * self.HOME_KD * smooth_t * kd_scale
 
         self._rp  = return_progress
-        self.acc  = self.acc_flock_smooth + f_home
+        self.acc  = self.acc_smooth + f_sep + f_home
 
     def update(self):
         self.vel  = self._limit(self.vel + self.acc, self.MAX_SPEED)
         self.vel *= 0.98                                    # gentle damping
         self.pos      = (self.pos + self.vel) % np.array([self.w, self.h])
-        self._vel_history.append(self.vel.copy())            # record after vel update
-        self.acc_flock_prev = self.acc_flock_smooth.copy()   # save for next jerk calc
-        self.acc           *= 0
+        self._vel_history.append(self.vel.copy())       # record after vel update
+        self.jerk_vec_prev   = self._jerk_actual.copy() # save jerk for snap calc
+        self.acc_smooth_prev = self.acc_smooth.copy()   # save acc for jerk calc
+        self.acc            *= 0
 
 # ── Icon boid (orbital vortex) ────────────────────────────────────────────────
 class IconBoid:
