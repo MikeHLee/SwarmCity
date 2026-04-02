@@ -258,23 +258,32 @@ class Boid:
         self._jerk_actual  = jerk_vec.copy()
         self._jerk_history.append(jerk_mag)
 
-        # ── f_home: phase-space PD return ──
-        # Bypasses jerk limiter — smooth_t is already a gradual ramp.
-        # Kd acts on rolling-average velocity (vel_avg) so the heading correction
-        # targets the boid's trajectory trend, not instantaneous velocity spikes.
-        # Kd is also softened when average flock jerk is already high, preventing
-        # compounding choppiness at the end of the animation.
+        # ── f_home: velocity-guided approach + late position lock ──
+        # Continuous force: unified velocity guidance that blends two desired velocities:
+        #   far from origin  → desired vel = direction toward origin (heading guidance)
+        #   near origin      → desired vel = origin_vel (arrive with correct heading)
+        # Position pull is NOT continuous — it only activates in the final 20% of
+        # smooth_t as a boundary condition to close the loop. This prevents freezing
+        # (no stiff position attractor) and mid-transit clustering (no magnetic grid pull).
         f_home = np.zeros(2)
         if self.origin is not None:
             pos_err  = self._torus_vec(self.origin)
+            pos_dist = np.linalg.norm(pos_err)
             vel_avg  = np.mean(np.stack(self._vel_history), axis=0) \
                        if len(self._vel_history) > 1 else self.vel.copy()
-            vel_err  = self.origin_vel - vel_avg
             mean_jerk = np.mean(self._jerk_history) if self._jerk_history else 0.0
-            kp_scale  = 1.0 / (1.0 + mean_jerk * 3.0)   # soften pos pull when turbulent
-            kd_scale  = 1.0 / (1.0 + mean_jerk * 5.0)   # soften vel correction more aggressively
-            f_home += steer(pos_err) * self.HOME_KP * smooth_t * kp_scale
-            f_home += steer(vel_err) * self.HOME_KD * smooth_t * kd_scale
+            kd_scale  = 1.0 / (1.0 + mean_jerk * 5.0)
+
+            # Blend: 1 = heading toward origin (far), 0 = match origin_vel (at origin)
+            blend       = min(pos_dist / 30.0, 1.0)
+            toward_orig = pos_err / max(pos_dist, 1e-4) * self.MAX_SPEED
+            desired_vel = blend * toward_orig + (1.0 - blend) * self.origin_vel
+            f_home += steer(desired_vel - vel_avg) * self.HOME_KD * smooth_t * kd_scale
+
+            # Position lock: brief boundary condition in final 20% of smooth_t only
+            pos_end_t = max(0.0, (smooth_t - 0.8) / 0.2)
+            kp_scale  = 1.0 / (1.0 + mean_jerk * 3.0)
+            f_home += steer(pos_err) * self.HOME_KP * pos_end_t * kp_scale
 
         self._rp  = return_progress
         self.acc  = self.acc_smooth + f_sep + f_home
