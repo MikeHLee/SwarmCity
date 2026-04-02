@@ -148,9 +148,29 @@ class Boid:
         for o in boids:
             if o is self: continue
             d = np.linalg.norm(o.pos - self.pos)
-            if 0 < d < self.SEP_RADIUS: sep += (self.pos-o.pos)/d; sc+=1
-            if 0 < d < self.ALI_RADIUS: ali += o.vel;              ac+=1
-            if 0 < d < self.COH_RADIUS: coh += o.pos;              cc+=1
+            # Use wrapped distance for torus topology
+            dx = abs(self.pos[0] - o.pos[0])
+            dy = abs(self.pos[1] - o.pos[1])
+            dx = min(dx, self.w - dx)
+            dy = min(dy, self.h - dy)
+            torus_d = math.sqrt(dx*dx + dy*dy)
+            
+            if 0 < torus_d < self.SEP_RADIUS: 
+                # Direction vector handling wrap
+                dir_x = self.pos[0] - o.pos[0]
+                if abs(dir_x) > self.w/2: dir_x = -np.sign(dir_x) * (self.w - abs(dir_x))
+                dir_y = self.pos[1] - o.pos[1]
+                if abs(dir_y) > self.h/2: dir_y = -np.sign(dir_y) * (self.h - abs(dir_y))
+                sep += np.array([dir_x, dir_y]) / torus_d; sc+=1
+                
+            if 0 < torus_d < self.ALI_RADIUS: ali += o.vel;              ac+=1
+            if 0 < torus_d < self.COH_RADIUS:
+                # Add wrapped position
+                ox = o.pos[0]
+                oy = o.pos[1]
+                if abs(ox - self.pos[0]) > self.w/2: ox += self.w * np.sign(self.pos[0] - ox)
+                if abs(oy - self.pos[1]) > self.h/2: oy += self.h * np.sign(self.pos[1] - oy)
+                coh += np.array([ox, oy]); cc+=1
 
         def steer(desired):
             n = np.linalg.norm(desired)
@@ -163,8 +183,25 @@ class Boid:
         if cc: f += steer(coh/cc - self.pos) * 1.0
 
         # Return-to-origin spring force (quadratic ramp for smooth loop)
-        return_force = self.origin - self.pos
-        weight = self.RETURN_WEIGHT * (return_progress ** 1.5)
+        # Calculate shortest path on torus
+        ret_x = self.origin[0] - self.pos[0]
+        if abs(ret_x) > self.w/2: ret_x = -np.sign(ret_x) * (self.w - abs(ret_x))
+        
+        ret_y = self.origin[1] - self.pos[1]
+        if abs(ret_y) > self.h/2: ret_y = -np.sign(ret_y) * (self.h - abs(ret_y))
+        
+        return_force = np.array([ret_x, ret_y])
+        
+        # Center attraction (gentle pull to middle to prevent scattering to edges)
+        center_x = self.w/2 - self.pos[0]
+        if abs(center_x) > self.w/2: center_x = -np.sign(center_x) * (self.w - abs(center_x))
+        center_y = self.h/2 - self.pos[1]
+        if abs(center_y) > self.h/2: center_y = -np.sign(center_y) * (self.h - abs(center_y))
+        center_force = np.array([center_x, center_y])
+        
+        f += center_force * 0.015  # gentle pull to center
+        
+        weight = self.RETURN_WEIGHT * (return_progress ** 2.0) # steeper ramp
         f += return_force * weight
 
         self.acc = f
