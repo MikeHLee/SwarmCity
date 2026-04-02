@@ -107,7 +107,7 @@ def load_custom_background(path, w, h):
 class Boid:
     MAX_SPEED  = 2.8
     MAX_FORCE  = 0.12
-    SEP_RADIUS = 28.0
+    SEP_RADIUS = 40.0   # increased from 28.0 for stronger keep-apart
     ALI_RADIUS = 55.0
     COH_RADIUS = 60.0
     RETURN_WEIGHT = 0.08  # base weight for return-to-origin spring
@@ -213,9 +213,11 @@ class Boid:
                 wander_steer = steer(target - self.pos)
                 f += wander_steer * self.WANDER_WEIGHT * explore_progress
 
-        if sc: f += steer(sep/sc) * 1.8
+        # Separation is the dominant force (keep-apart dynamic)
+        if sc: f += steer(sep/sc) * 3.5  # increased from 1.8
         if ac: av=ali/ac; n=np.linalg.norm(av); f += steer(av/n*self.MAX_SPEED if n else av) * 1.0
-        if cc: f += steer(coh/cc - self.pos) * 1.0
+        # Reduce cohesion so they don't clump as much
+        if cc: f += steer(coh/cc - self.pos) * 0.4  # decreased from 1.0
 
         # Return-to-origin spring force
         # Calculate shortest path on torus
