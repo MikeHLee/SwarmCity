@@ -144,7 +144,8 @@ class Boid:
     COH_W         = 0.5    # cohesion: weak, just maintains loose group
     ORBIT_W       = 0.45   # tangential circling around group centre
     WANDER_W      = 1.2    # exploration (fades as inverse of home ramp)
-    HOME_W_MAX    = 5.0    # home force ceiling — must dominate by t=1
+    HOME_KP       = 5.0    # position return gain  (P term)
+    HOME_KD       = 3.0    # velocity matching gain (D term) — corrects heading
     WANDER_RADIUS = 20.0
     WANDER_DIST   = 28.0
     WANDER_JITTER = 0.4
@@ -232,15 +233,14 @@ class Boid:
                 target = ahead + np.array([math.cos(self.wander_theta), math.sin(self.wander_theta)]) * self.WANDER_RADIUS
                 f += steer(self._torus_vec(target)) * self.WANDER_W * explore_t
 
-        # Home force: grows as explore decays — same smoothstep, complementary
+        # Phase-space PD return: F = Kp * pos_error + Kd * vel_error
+        # Both error signals go through steer() so forces are properly capped.
+        # Kd acting on vel_error steers agent to arrive at origin WITH correct heading.
         if self.origin is not None:
-            home_vec = self._torus_vec(self.origin)
-            f += steer(home_vec) * self.HOME_W_MAX * smooth_t
-
-            # velocity matching: start at 40%, weight 0.5 — feeds convergence
-            if return_progress > 0.4:
-                vel_blend = (return_progress - 0.4) / 0.6
-                f += (self.origin_vel - self.vel) * 0.5 * vel_blend
+            pos_err = self._torus_vec(self.origin)          # P: where should I be?
+            vel_err = self.origin_vel - self.vel            # D: how should I be moving?
+            f += steer(pos_err) * self.HOME_KP * smooth_t
+            f += steer(vel_err) * self.HOME_KD * smooth_t
 
         self._rp = return_progress
         self.acc = f
@@ -248,14 +248,6 @@ class Boid:
     def update(self):
         self.vel  = self._limit(self.vel + self.acc, self.MAX_SPEED)
         self.vel *= 0.98                                    # gentle damping
-
-        # Direct velocity blend in final 30%: guarantees heading convergence at loop point
-        # ease-in so it doesn't disrupt mid-animation movement
-        if self._rp > 0.7 and self.origin_vel is not None:
-            t     = (self._rp - 0.7) / 0.3               # 0 → 1 in last 30%
-            blend = t * t                                  # ease-in
-            self.vel = self.vel + (self.origin_vel - self.vel) * blend
-
         self.pos  = (self.pos + self.vel) % np.array([self.w, self.h])
         self.acc *= 0
 
@@ -423,6 +415,12 @@ for _ in range(60):
             desired = sep / sc / n * b.MAX_SPEED if n > 0 else np.zeros(2)
             b.acc = b._limit(desired - b.vel, b.MAX_FORCE) * b.SEP_W
     for b in boids: b.update()
+
+# Re-inject non-zero velocities before capture so origin_vel is a meaningful
+# heading target for the Kd term (warmup damping decays vel to ~0.3x original)
+for b in boids:
+    a = random.uniform(0, 2 * math.pi)
+    b.vel = np.array([math.cos(a), math.sin(a)]) * random.uniform(1.2, b.MAX_SPEED)
 
 # Capture origin AFTER warmup — frame 0 will match this state exactly
 for b in boids: b.capture_origin()
