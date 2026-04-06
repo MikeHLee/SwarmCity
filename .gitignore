@@ -8,6 +8,9 @@ venv/
 *.swp
 .DS_Store
 
+# Private outreach drafts and scratch notes
+.drafts/
+
 # GIF generator scripts and input assets
 gen_logo.py
 generate_logo.py

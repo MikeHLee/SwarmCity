@@ -39,6 +39,9 @@ nav:
   - Reference:
       - CLI Reference: CLI_REFERENCE.md
       - Architecture & Internals: ARCHITECTURE.md
+      - Integration Plan: INTEGRATION_PLAN.md
+  - swarms.ai Integration:
+      - PR Guide: SWARMS_AI_PR_GUIDE.md
   - Credits & Inspiration: CREDITS.md
 
 markdown_extensions:

@@ -17,6 +17,9 @@ SwarmCity is a minimal, git-native, markdown-first agent orchestration system fo
 
 ## Current Focus Areas
 
-1. **Distribution (Phase 4)**: Publishing dot-swarm to PyPI and Homebrew. PyPI workflow is in place; blocked on Trusted Publishing OIDC setup. Homebrew formula needs update after first PyPI publish.
-2. **Swarm Visualizer**: GUI for visualizing swarm trails — complete.
-3. **Hierarchical Alignment**: CLI commands (`up` and `down`) — complete.
+1. **Distribution (Phase 4)**: Publishing dot-swarm to PyPI and Homebrew. PyPI workflow is in place; blocked on Trusted Publishing OIDC setup (SWC-003 → SWC-006).
+2. **Research — Stigmergy (SWC-007)**: Writing the AAMAS / LLM-agents workshop paper. Core claim: first filesystem-native stigmergy protocol for multi-agent AI dev teams. Needs comparative experiment and at least one real multi-agent case study.
+3. **Research — Boids Looping (SWC-008)**: Writing the SIGGRAPH Talks / Eurographics short paper. Core contribution: jerk + snap constraints + trajectory-capture looping + Hermite C1 approach, achieving 99.7% reduction in loop error. Needs ablation study; depends on BoidRunner refactor for eval harness.
+4. **BoidRunner (SWC-009)**: Phased launch — (1) technical blog post leading with animated GIFs and loop-error chart, (2) standalone PyPI package with clean `Swarm` API, (3) browser-based interactive simulator / casual game.
+5. **Swarm Visualizer**: GUI for visualizing swarm trails — complete.
+6. **Hierarchical Alignment**: CLI commands (`up` and `down`) — complete.

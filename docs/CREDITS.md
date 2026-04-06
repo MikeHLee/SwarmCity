@@ -152,6 +152,60 @@ phenomena SwarmCity adapts for software agent fleets.
 
 ---
 
+## Protocol Engineering & Federated Coordination
+
+### OGP — Open Gateway Protocol
+
+> Proctor, D. (2026). "Case Study: Building a Protocol in the Age of AI."
+> *Trilogy AI Substack*.
+> https://trilogyai.substack.com/p/case-study-building-a-protocol-in
+
+David Proctor's public post-mortem on building OGP — a federated inter-agent
+protocol — is one of the most concrete accounts of what goes wrong when
+**identity, trust, and persistence assumptions are made incorrectly** in a
+multi-agent system.
+
+Two threads from this work are directly foundational to dot_swarm:
+
+**1. Inter-agent identity and trust**
+
+OGP's early design treated identity as a hostname:port pair — a mutable,
+network-layer address rather than a cryptographic fingerprint. This produced
+a class of bugs where peer identity silently shifted across restarts or
+network changes. The lesson, applied in `federation.py`:
+
+> *"Identity is a fingerprint, never an address."*
+
+dot_swarm's `doorman_check()` always resolves `from_fingerprint` from the
+stored `trusted_peers/` record — it never trusts the identity claimed in
+the message body itself. This is a direct application of the OGP post-mortem.
+
+**2. Security under adversarial conditions**
+
+The post-mortem surfaces a category of failure that is easy to miss when
+building in good faith: **an attacker who controls the message body can
+impersonate any peer if the receiver trusts the sender's own claim**. This
+applies not only to federation but to any system that ingests external text —
+including LLM prompt contexts.
+
+This insight directly motivated dot_swarm's `security.py` adversarial scanner:
+the same trust-the-claim failure mode that breaks cross-agent federation also
+enables prompt injection attacks (an adversarial "agent" claims authority it
+was not granted). The 18-pattern scanner, the three-layer doorman model, and
+the signed pheromone trail all address variants of this same root problem.
+
+**Relationship to dot_swarm's design:**
+
+| OGP lesson | dot_swarm implementation |
+|---|---|
+| Identity = fingerprint, not address | `identity.json` stores `fingerprint`; `trust_peer()` indexes on it |
+| Persist before returning success | `trust_peer()` calls `_atomic_write()` before `return` |
+| Never trust claimed sender ID | `doorman_check()` looks up stored record — ignores `from_fingerprint` field in message |
+| Layered scopes limit blast radius | `policy.md` → `trusted_peers/<fp>.json` → runtime `doorman_check()` |
+| HMAC is wrong for cross-party signing | HMAC retained for local trail only; Ed25519 documented as upgrade path |
+
+---
+
 ## Design Lineage
 
 | Biological concept | SwarmCity implementation |

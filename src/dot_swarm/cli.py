@@ -166,6 +166,11 @@ def init(ctx: click.Context, level: str | None, division_code: str | None,
     if not is_div:
         (swarm_dir / "workflows").mkdir(exist_ok=True)
 
+    # Generate signing identity (idempotent — skipped if already exists)
+    from . import signing as _sign
+    _sign.generate_identity(swarm_dir)
+    _ensure_gitignore(swarm_dir)
+
     click.echo(f"Created .swarm/ with {len(list(swarm_dir.iterdir()))} files/dirs.")
 
     if is_div:
@@ -308,21 +313,113 @@ def add(ctx: click.Context, description: str, priority: str, project: str,
 # swarm audit
 # ---------------------------------------------------------------------------
 
-@cli.command()
+@cli.command(name="audit")
 @click.option("--since", default=48, help="Stale threshold in hours (default: 48)")
+@click.option("--pending", "show_pending", is_flag=True, default=False,
+              help="List all pending items")
+@click.option("--security", "run_security", is_flag=True, default=False,
+              help="Run adversarial/injection content scan")
+@click.option("--drift", "run_drift", is_flag=True, default=False,
+              help="Run AI code-vs-docs drift check (requires LLM backend)")
+@click.option("--trail", "check_trail", is_flag=True, default=False,
+              help="Verify pheromone trail HMAC signatures")
+@click.option("--full", is_flag=True, default=False,
+              help="Run all checks (--pending --security --drift --trail)")
 @click.pass_context
-def audit_cmd(ctx: click.Context, since: int) -> None:
-    """Check for drift: stale claims, blocked items, state.md staleness."""
+def audit_cmd(
+    ctx: click.Context,
+    since: int,
+    show_pending: bool,
+    run_security: bool,
+    run_drift: bool,
+    check_trail: bool,
+    full: bool,
+) -> None:
+    """Check for drift: stale claims, blocked items, and queue health.
+
+    With --full, also runs security scan, AI drift check, and trail
+    signature verification.
+
+    Examples:
+      swarm audit                # Basic stale/blocked check
+      swarm audit --pending      # Include all pending items
+      swarm audit --security     # Add adversarial content scan
+      swarm audit --drift        # Add AI code-vs-docs drift check
+      swarm audit --trail        # Verify pheromone trail integrity
+      swarm audit --full         # All of the above
+    """
+    if full:
+        show_pending = run_security = run_drift = check_trail = True
+
     paths = _get_paths(ctx.obj["path"])
+
+    # --- Basic queue audit ---------------------------------------------------
     findings = audit(paths, stale_hours=since)
     if not findings:
-        click.echo("No drift detected.")
-        return
-    for f in findings:
-        icon = "⚠️ " if f["severity"] == "WARN" else "🚨"
-        id_str = f"[{f['item_id']}] " if f["item_id"] else ""
-        click.echo(f"{icon} {id_str}{f['message']}")
-        click.echo(f"   → {f['suggested_action']}")
+        click.echo("✓ No stale claims or state drift.")
+    else:
+        for f in findings:
+            icon = "⚠️ " if f["severity"] == "WARN" else "🚨"
+            id_str = f"[{f['item_id']}] " if f["item_id"] else ""
+            click.echo(f"{icon} {id_str}{f['message']}")
+            click.echo(f"   → {f['suggested_action']}")
+
+    # --- Blockers (always shown) ---------------------------------------------
+    active, pending, _ = read_queue(paths)
+    blocked = [i for i in active if i.state == ItemState.BLOCKED]
+    if blocked:
+        click.echo(f"\nBlockers ({len(blocked)}):")
+        for item in blocked:
+            click.echo(f"  🚫 {item.id}: {item.notes}")
+
+    # --- Pending items -------------------------------------------------------
+    if show_pending:
+        click.echo(f"\nPending Items ({len(pending)}):")
+        if pending:
+            for item in pending:
+                click.echo(
+                    f"  [ ] {item.id}: {item.description[:60]}"
+                    f"  [{item.priority.value.upper()}]"
+                )
+        else:
+            click.echo("  (none)")
+
+    # --- Security scan -------------------------------------------------------
+    if run_security:
+        from . import security as _sec
+        div_root = paths.root.parent
+        sec_findings = _sec.scan_swarm_directory(paths) + _sec.scan_platform_shims(div_root)
+        counts = _sec.severity_counts(sec_findings)
+        click.echo(
+            f"\nSecurity Scan — "
+            f"🚨 {counts['CRITICAL']} critical  "
+            f"⚠️  {counts['HIGH']} high  "
+            f"ℹ️  {counts['MEDIUM']} medium"
+        )
+        for line in _sec.format_findings(sec_findings):
+            click.echo(line)
+
+    # --- Trail integrity -----------------------------------------------------
+    if check_trail:
+        from . import signing as _sign
+        click.echo("\nPheromone Trail:")
+        identity = _sign.load_identity(paths.root)
+        if not identity:
+            click.echo("  ℹ  No signing identity found — run 'swarm init' to enable.")
+        else:
+            tampered = _sign.verify_trail(paths.root)
+            trail_len = len(_sign.read_trail(paths.root))
+            if tampered:
+                click.echo(f"  🚨 {len(tampered)} tampered entry(ies) detected!")
+                for rec in tampered[:5]:
+                    click.echo(f"     Agent: {rec['agent_id']}  Op: {rec['op']}  At: {rec['timestamp']}")
+            else:
+                click.echo(f"  ✓ Trail verified ({trail_len} entries, all valid).")
+
+    # --- AI drift check ------------------------------------------------------
+    if run_drift:
+        click.echo("\nDrift Check:")
+        _run_local_drift_check(ctx, paths)
 
 
 # ---------------------------------------------------------------------------
@@ -503,6 +600,679 @@ def descend(ctx: click.Context) -> None:
         click.echo("Sub-divisions present: " + ", ".join(p.name for p, _ in children))
 
     click.echo("")
+
+
+# ---------------------------------------------------------------------------
+# swarm heal
+# ---------------------------------------------------------------------------
+
+@cli.command(name="heal")
+@click.option("--fix", is_flag=True, default=False,
+              help="Quarantine adversarial content and block tampered trail signers")
+@click.option("--depth", default=1,
+              help="Child-division scan depth for descend alignment (default: 1)")
+@click.pass_context
+def heal(ctx: click.Context, fix: bool, depth: int) -> None:
+    """Full health pass: alignment, security scan, and trail verification.
+
+    Runs ascend + descend alignment checks, scans .swarm/ files and
+    platform shims for adversarial content (prompt injections, hidden
+    instructions, non-disclosure directives), and verifies the
+    cryptographic integrity of the pheromone trail.
+
+    Any security findings are logged to memory.md and printed at the
+    end of the pass so they are never silently swallowed.
+
+    With --fix:
+      - Backs up flagged files to .swarm/quarantine/ for human review
+      - Blocks the HMAC fingerprints of tampered trail entries
+
+    Examples:
+      swarm heal              # Read-only health check
+      swarm heal --fix        # Attempt automatic remediation
+      swarm heal --depth 2    # Descend two levels into child divisions
+    """
+    from . import security as _sec
+    from . import signing as _sign
+
+    paths    = _get_paths(ctx.obj["path"])
+    div_root = paths.root.parent
+    div_name = div_root.name
+
+    click.echo(f"\n⟳  Healing {div_name}…\n")
+
+    # ── 1. Alignment ────────────────────────────────────────────────────────
+    click.echo("── Alignment ──────────────────────────────────────────")
+
+    parent_paths = find_parent_paths(paths)
+    if parent_paths:
+        al = get_alignment(paths, parent_paths)
+        label = parent_paths.root.parent.name
+        if al:
+            click.echo(f"  ↑ {len(al)} link(s) → parent: {label}")
+        else:
+            click.echo(f"  ↑ No explicit links to parent ({label})")
+    else:
+        click.echo("  ↑ No parent division found.")
+
+    child_divisions = discover_divisions(div_root, depth=depth)
+    children = [(p, ps) for p, ps in child_divisions if p != div_root]
+    child_links = sum(len(get_alignment(paths, cps)) for _, cps in children)
+    orphan_items: list[str] = []
+    if children:
+        click.echo(f"  ↓ {child_links} link(s) across {len(children)} child division(s)")
+        # Identify local items with no upward or downward link
+        local_active, local_pending, _ = read_queue(paths)
+        linked_ids = set()
+        if parent_paths:
+            for l_item, _ in get_alignment(paths, parent_paths):
+                linked_ids.add(l_item.id)
+        for _, cps in children:
+            for l_item, _ in get_alignment(paths, cps):
+                linked_ids.add(l_item.id)
+        for item in local_active + local_pending:
+            if item.id not in linked_ids:
+                orphan_items.append(item.id)
+        if orphan_items:
+            click.echo(f"  ℹ  {len(orphan_items)} orphaned item(s) (no cross-division links):")
+            for oid in orphan_items[:5]:
+                click.echo(f"     {oid}")
+    else:
+        click.echo("  ↓ No child divisions found.")
+
+    # ── 2. Queue health ─────────────────────────────────────────────────────
+    click.echo("\n── Queue Health ────────────────────────────────────────")
+    queue_findings = audit(paths)
+    if queue_findings:
+        for f in queue_findings:
+            icon = "⚠️ " if f["severity"] == "WARN" else "🚨"
+            id_str = f"[{f['item_id']}] " if f["item_id"] else ""
+            click.echo(f"  {icon} {id_str}{f['message']}")
+    else:
+        click.echo("  ✓ No stale claims or blocked items.")
+    _, pending_q, _ = read_queue(paths)
+    if pending_q:
+        click.echo(f"  ℹ  {len(pending_q)} pending item(s) awaiting pickup.")
+
+    # ── 3. Security scan ────────────────────────────────────────────────────
+    click.echo("\n── Security Scan ───────────────────────────────────────")
+    swarm_sec  = _sec.scan_swarm_directory(paths)
+    shim_sec   = _sec.scan_platform_shims(div_root)
+    all_sec    = swarm_sec + shim_sec
+    counts     = _sec.severity_counts(all_sec)
+
+    if all_sec:
+        click.echo(
+            f"  🚨 {counts['CRITICAL']} critical  "
+            f"⚠️  {counts['HIGH']} high  "
+            f"ℹ️  {counts['MEDIUM']} medium"
+        )
+        for line in _sec.format_findings(all_sec):
+            click.echo(line)
+
+        if fix:
+            click.echo("\n  [--fix] Backing up flagged files to .swarm/quarantine/…")
+            _quarantine_findings(paths, div_root, all_sec)
+    else:
+        click.echo("  ✓ No adversarial content detected.")
+
+    # ── 4. Pheromone trail integrity ─────────────────────────────────────────
+    click.echo("\n── Pheromone Trail Integrity ───────────────────────────")
+    identity = _sign.load_identity(paths.root)
+    tampered: list[dict] = []
+    if not identity:
+        click.echo("  ℹ  No signing identity. Run 'swarm init' to enable trail signing.")
+    else:
+        tampered = _sign.verify_trail(paths.root)
+        trail_len = len(_sign.read_trail(paths.root))
+        if tampered:
+            click.echo(f"  🚨 {len(tampered)} tampered trail entry(ies) detected!")
+            for rec in tampered[:5]:
+                click.echo(
+                    f"     Fingerprint: {rec.get('fingerprint','?')}  "
+                    f"Agent: {rec['agent_id']}  Op: {rec['op']}"
+                )
+            if fix:
+                fps = {r.get("fingerprint", "") for r in tampered
+                       if r.get("fingerprint", "") not in ("unsigned", "")}
+                for fp in fps:
+                    _sign.block_peer(paths.root, fp)
+                    click.echo(f"  🔒 Blocked fingerprint: {fp}")
+        else:
+            click.echo(f"  ✓ Trail verified ({trail_len} entries, all signatures valid).")
+
+    # ── 5. Summary & memory log ──────────────────────────────────────────────
+    click.echo("\n── Summary ─────────────────────────────────────────────")
+    total_issues = len(queue_findings) + len(all_sec) + len(tampered)
+    if total_issues == 0:
+        click.echo(f"  ✓ {div_name} is healthy.\n")
+    else:
+        click.echo(f"  {total_issues} issue(s) found.")
+        if all_sec and not fix:
+            click.echo("  Run 'swarm heal --fix' to quarantine adversarial content.\n")
+
+    if all_sec:
+        sources = ", ".join(sorted({f.source for f in all_sec}))
+        summary = (
+            f"heal found {counts['CRITICAL']} critical / {counts['HIGH']} high / "
+            f"{counts['MEDIUM']} medium security issues in: {sources}"
+        )
+        append_memory(paths, topic="heal-security-scan", decision=summary,
+                      why="Automatic heal audit log — findings must not be silently lost",
+                      tradeoff="", agent_id="swarm-heal")
+        click.echo(f"  Findings logged to memory.md.")
+
+    click.echo("")
+
+
+# ---------------------------------------------------------------------------
+# swarm federation
+# ---------------------------------------------------------------------------
+
+@cli.group(name="federation")
+@click.pass_context
+def federation_group(ctx: click.Context) -> None:
+    """OGP-lite cross-swarm federation commands.
+
+    Federation lets separate .swarm/ hierarchies exchange work items and
+    alignment signals using signed intent messages. Trust is bilateral and
+    explicit — no central registry.
+
+    Typical flow:
+      swarm federation init                  # create federation dirs
+      swarm federation export-id             # share identity.json with peer
+      swarm federation trust peer_id.json    # import peer's identity
+      swarm federation peers                 # confirm trust established
+      swarm federation send <fp> work_request --desc "Help with X"
+      swarm federation inbox                 # check received messages
+      swarm federation apply inbox/msg.json  # apply message to queue
+    """
+
+
+@federation_group.command(name="init")
+@click.pass_context
+def federation_init(ctx: click.Context) -> None:
+    """Create federation/ directory structure inside .swarm/."""
+    from . import federation as _fed
+    paths = _get_paths(ctx.obj["path"])
+    _fed.init_federation(paths.root)
+    click.echo(f"✓ Federation directories initialised at {paths.root}/federation/")
+    click.echo("  Share your identity with peers: swarm federation export-id")
+
+
+@federation_group.command(name="export-id")
+@click.option("--out", default=None, metavar="FILE",
+              help="Write identity to file (default: print to stdout)")
+@click.pass_context
+def federation_export_id(ctx: click.Context, out: str | None) -> None:
+    """Print this swarm's public identity (safe to share with peers)."""
+    from . import federation as _fed
+    paths = _get_paths(ctx.obj["path"])
+    try:
+        identity = _fed.export_identity(paths.root)
+    except FileNotFoundError as exc:
+        click.echo(f"Error: {exc}", err=True)
+        raise SystemExit(1)
+    text = __import__("json").dumps(identity, indent=2)
+    if out:
+        Path(out).write_text(text)
+        click.echo(f"✓ Identity written to {out}")
+    else:
+        click.echo(text)
+
+
+@federation_group.command(name="trust")
+@click.argument("peer_identity_file", metavar="PEER_IDENTITY_JSON")
+@click.option("--name", default="", metavar="NAME",
+              help="Human-readable name for this peer")
+@click.option("--scopes", default="work_request,alignment_signal", metavar="SCOPES",
+              help="Comma-separated list of permitted intents (default: work_request,alignment_signal)")
+@click.pass_context
+def federation_trust(
+    ctx: click.Context, peer_identity_file: str, name: str, scopes: str
+) -> None:
+    """Import a peer's identity.json and establish bilateral trust.
+
+    PEER_IDENTITY_JSON is the path to the identity file your peer shared.
+    """
+    from . import federation as _fed
+    paths = _get_paths(ctx.obj["path"])
+    peer_path = Path(peer_identity_file)
+    if not peer_path.exists():
+        click.echo(f"Error: {peer_path} not found.", err=True)
+        raise SystemExit(1)
+    _fed.init_federation(paths.root)
+    scope_list = [s.strip() for s in scopes.split(",") if s.strip()]
+    try:
+        peer = _fed.trust_peer(paths.root, peer_path, display_name=name, scopes=scope_list)
+    except ValueError as exc:
+        click.echo(f"Error: {exc}", err=True)
+        raise SystemExit(1)
+    click.echo(f"✓ Trusted: {peer.display_name} [{peer.fingerprint}]")
+    click.echo(f"  Scopes: {', '.join(peer.scopes)}")
+
+
+@federation_group.command(name="revoke")
+@click.argument("fingerprint")
+@click.pass_context
+def federation_revoke(ctx: click.Context, fingerprint: str) -> None:
+    """Remove a peer from trusted peers by their fingerprint."""
+    from . import federation as _fed
+    paths = _get_paths(ctx.obj["path"])
+    removed = _fed.revoke_peer(paths.root, fingerprint)
+    if removed:
+        click.echo(f"✓ Revoked: {fingerprint}")
+    else:
+        click.echo(f"Not found: {fingerprint} (already removed?)")
+
+
+@federation_group.command(name="peers")
+@click.pass_context
+def federation_peers(ctx: click.Context) -> None:
+    """List all trusted federation peers."""
+    from . import federation as _fed
+    paths = _get_paths(ctx.obj["path"])
+    peers = _fed.list_peers(paths.root)
+    if not peers:
+        click.echo("No trusted peers. Run: swarm federation trust <peer_identity.json>")
+        return
+    click.echo(f"{'Fingerprint':<18}  {'Name':<24}  {'Scopes'}")
+    click.echo("-" * 70)
+    for p in peers:
+        click.echo(f"{p.fingerprint:<18}  {p.display_name:<24}  {', '.join(p.scopes)}")
+
+
+@federation_group.command(name="send")
+@click.argument("to_fingerprint")
+@click.argument("intent", type=click.Choice(["work_request", "alignment_signal", "capability_ad"]))
+@click.option("--desc", default="", metavar="TEXT", help="Description (for work_request)")
+@click.option("--context", "ctx_note", default="", metavar="TEXT",
+              help="Extra context to include in the payload")
+@click.option("--agent", default=None, help="Agent ID to record in the message")
+@click.pass_context
+def federation_send(
+    ctx: click.Context,
+    to_fingerprint: str,
+    intent: str,
+    desc: str,
+    ctx_note: str,
+    agent: str | None,
+) -> None:
+    """Create a signed outbound intent message in outbox/.
+
+    TO_FINGERPRINT is the 16-char fingerprint from 'swarm federation peers'.
+    INTENT is the type of message to send.
+
+    Deliver the resulting file to the peer via git, shared directory,
+    or any other transport — then they run 'swarm federation apply'.
+    """
+    from . import federation as _fed
+    paths = _get_paths(ctx.obj["path"])
+    agent_id = agent or _default_agent()
+    payload: dict = {}
+    if desc:
+        payload["description"] = desc
+    if ctx_note:
+        payload["context"] = ctx_note
+    try:
+        out_path = _fed.write_outbox(paths.root, to_fingerprint, intent, payload, agent_id)
+    except FileNotFoundError as exc:
+        click.echo(f"Error: {exc}", err=True)
+        raise SystemExit(1)
+    click.echo(f"✓ Message written: {out_path}")
+    click.echo("  Deliver this file to the peer; they run: swarm federation apply <file>")
+
+
+@federation_group.command(name="inbox")
+@click.pass_context
+def federation_inbox(ctx: click.Context) -> None:
+    """List messages received in inbox/."""
+    from . import federation as _fed
+    paths = _get_paths(ctx.obj["path"])
+    messages = _fed.read_inbox(paths.root)
+    if not messages:
+        click.echo("Inbox is empty.")
+        return
+    click.echo(f"{'Timestamp':<18}  {'From':<10}  {'Intent':<20}  File")
+    click.echo("-" * 75)
+    for m in messages:
+        fname = m.source_file.name if m.source_file else "?"
+        click.echo(
+            f"{m.timestamp:<18}  {m.from_fingerprint[:8]:<10}  {m.intent:<20}  {fname}"
+        )
+    click.echo(f"\n{len(messages)} message(s). Apply: swarm federation apply <file>")
+
+
+@federation_group.command(name="apply")
+@click.argument("message_file", metavar="MESSAGE_JSON")
+@click.option("--yes", "-y", is_flag=True, help="Apply without confirmation prompt")
+@click.pass_context
+def federation_apply(ctx: click.Context, message_file: str, yes: bool) -> None:
+    """Apply an inbox message to this swarm's queue.
+
+    MESSAGE_JSON is the path to the received message file
+    (see 'swarm federation inbox' for the filename).
+    """
+    from . import federation as _fed
+    paths = _get_paths(ctx.obj["path"])
+    msg_path = Path(message_file)
+    if not msg_path.exists():
+        click.echo(f"Error: {msg_path} not found.", err=True)
+        raise SystemExit(1)
+
+    try:
+        import json as _json
+        data = _json.loads(msg_path.read_text())
+    except Exception as exc:
+        click.echo(f"Error reading message: {exc}", err=True)
+        raise SystemExit(1)
+
+    intent = data.get("intent", "?")
+    from_fp = data.get("from_fingerprint", "?")[:8]
+    payload = data.get("payload", {})
+
+    click.echo(f"\nMessage: {intent} from {from_fp}")
+    if payload:
+        for k, v in payload.items():
+            click.echo(f"  {k}: {v}")
+    click.echo("")
+
+    if not yes:
+        click.confirm("Apply this message?", abort=True)
+
+    result = _fed.apply_inbox_message(paths.root, msg_path, add_item, paths)
+    if result["ok"]:
+        click.echo(f"✓ {result['reason']}")
+    else:
+        click.echo(f"✗ {result['reason']}", err=True)
+        raise SystemExit(1)
+
+
+# ---------------------------------------------------------------------------
+# swarm schedule
+# ---------------------------------------------------------------------------
+
+@cli.group(name="schedule")
+@click.pass_context
+def schedule_group(ctx: click.Context) -> None:
+    """Cron and event-driven schedule management.
+
+    Schedules are stored in .swarm/schedules.md. Run 'swarm schedule run-due'
+    from your system crontab to execute due schedules automatically.
+
+    Types: cron (5-field expr), interval (30m/6h/2d), on:done, on:blocked.
+    """
+
+
+@schedule_group.command(name="list")
+@click.pass_context
+def schedule_list(ctx: click.Context) -> None:
+    """List all configured schedules."""
+    from . import scheduler as _sched
+    paths = _get_paths(ctx.obj["path"])
+    schedules = _sched.load_schedules(paths.root)
+    if not schedules:
+        click.echo("No schedules configured. Use 'swarm schedule add' to create one.")
+        return
+    click.echo(f"\n{'ID':<12} {'TYPE':<10} {'SPEC':<20} {'LAST RUN':<20} COMMAND")
+    click.echo("─" * 80)
+    for s in schedules:
+        last = s.last_run[:16] if s.last_run else "never"
+        status = "" if s.enabled else " [disabled]"
+        click.echo(f"{s.id:<12} {s.stype:<10} {s.spec:<20} {last:<20} {s.command}{status}")
+    click.echo("")
+
+
+@schedule_group.command(name="add")
+@click.argument("spec")
+@click.argument("command")
+@click.option("--name", default="", help="Human-readable label")
+@click.option("--notes", default="", help="Optional description")
+@click.pass_context
+def schedule_add(ctx: click.Context, spec: str, command: str, name: str, notes: str) -> None:
+    """Add a new schedule.
+
+    SPEC is a cron expression ('0 */6 * * *'), interval ('6h'), or
+    event ('on:done CLD-042').
+
+    COMMAND is the shell command to run (e.g. 'swarm heal --fix').
+
+    Examples:
+
+      swarm schedule add '0 */6 * * *' 'swarm heal --fix'
+
+      swarm schedule add '6h' 'swarm audit --security' --name 'Security check'
+
+      swarm schedule add 'on:done CLD-042' 'swarm ai "claim CLD-043"'
+    """
+    from . import scheduler as _sched
+    paths = _get_paths(ctx.obj["path"])
+    stype = _sched._infer_stype(spec)
+    label = name or spec
+    s = _sched.add_schedule(paths.root, label, stype, spec, command, notes)
+    click.echo(f"✓ Added {s.id}: {s.stype} '{s.spec}' → {s.command}")
+
+
+@schedule_group.command(name="remove")
+@click.argument("schedule_id")
+@click.pass_context
+def schedule_remove(ctx: click.Context, schedule_id: str) -> None:
+    """Remove a schedule by ID (e.g. SCHED-001)."""
+    from . import scheduler as _sched
+    paths = _get_paths(ctx.obj["path"])
+    if _sched.remove_schedule(paths.root, schedule_id):
+        click.echo(f"✓ Removed {schedule_id}")
+    else:
+        click.echo(f"Schedule {schedule_id} not found.", err=True)
+        raise SystemExit(1)
+
+
+@schedule_group.command(name="run")
+@click.argument("schedule_id")
+@click.pass_context
+def schedule_run(ctx: click.Context, schedule_id: str) -> None:
+    """Manually trigger a specific schedule by ID."""
+    from . import scheduler as _sched
+    paths = _get_paths(ctx.obj["path"])
+    schedules = _sched.load_schedules(paths.root)
+    target = next((s for s in schedules if s.id == schedule_id), None)
+    if target is None:
+        click.echo(f"Schedule {schedule_id} not found.", err=True)
+        raise SystemExit(1)
+    click.echo(f"Running {schedule_id}: {target.command}")
+    result = _sched.run_schedule(paths.root, target)
+    if result.ok:
+        click.echo(f"✓ Exited 0")
+    else:
+        click.echo(f"✗ Exited {result.exit_code}", err=True)
+    if result.stdout:
+        click.echo(result.stdout)
+    if result.stderr:
+        click.echo(result.stderr, err=True)
+
+
+@schedule_group.command(name="run-due")
+@click.pass_context
+def schedule_run_due(ctx: click.Context) -> None:
+    """Run all currently due cron/interval schedules.
+
+    Add to system crontab for automatic execution:
+
+      * * * * *  cd /path/to/repo && swarm schedule run-due
+    """
+    from . import scheduler as _sched
+    paths = _get_paths(ctx.obj["path"])
+    results = _sched.run_due(paths.root)
+    if not results:
+        click.echo("No schedules due.")
+        return
+    for r in results:
+        status = "✓" if r.ok else "✗"
+        click.echo(f"  {status} {r.schedule_id} (exit {r.exit_code}): {r.command}")
+
+
+# ---------------------------------------------------------------------------
+# swarm workflow
+# ---------------------------------------------------------------------------
+
+@cli.group(name="workflow")
+@click.pass_context
+def workflow_group(ctx: click.Context) -> None:
+    """Multi-step workflow execution from .swarm/workflows/*.md.
+
+    Workflows define sequences of swarm commands and are expressed
+    in markdown with a YAML frontmatter header.
+
+    Patterns: sequential (default), concurrent, conditional, mixture.
+    """
+
+
+@workflow_group.command(name="list")
+@click.pass_context
+def workflow_list(ctx: click.Context) -> None:
+    """List available workflows in .swarm/workflows/."""
+    from . import workflows as _wf
+    paths = _get_paths(ctx.obj["path"])
+    names = _wf.list_workflows(paths)
+    if not names:
+        click.echo("No workflows found in .swarm/workflows/. Create a .md file to define one.")
+        return
+    click.echo(f"\nWorkflows in {paths.workflows}:\n")
+    for name in names:
+        try:
+            wf = _wf.load_workflow(paths, name)
+            trigger = wf.trigger
+            steps = len(wf.steps)
+            click.echo(f"  {name:<30} [{wf.pattern}]  trigger: {trigger}  ({steps} steps)")
+        except Exception:
+            click.echo(f"  {name:<30} [parse error]")
+    click.echo("")
+
+
+@workflow_group.command(name="show")
+@click.argument("name")
+@click.pass_context
+def workflow_show(ctx: click.Context, name: str) -> None:
+    """Show steps for a specific workflow."""
+    from . import workflows as _wf
+    paths = _get_paths(ctx.obj["path"])
+    try:
+        wf = _wf.load_workflow(paths, name)
+    except FileNotFoundError:
+        click.echo(f"Workflow '{name}' not found.", err=True)
+        raise SystemExit(1)
+    click.echo(f"\n{wf.name}  [{wf.pattern}]  trigger: {wf.trigger}")
+    if wf.description:
+        click.echo(f"  {wf.description}")
+    click.echo(f"\n  {'#':<4} {'COMMAND':<40} {'AGENT':<10} {'TIMEOUT'}")
+    click.echo("  " + "─" * 65)
+    for step in wf.steps:
+        deps = f"  depends: {','.join(step.depends)}" if step.depends else ""
+        cond = f"  if: {step.condition}" if step.condition else ""
+        click.echo(f"  {step.number:<4} {step.command:<40} {step.agent:<10} {step.timeout_min}m{deps}{cond}")
+    click.echo("")
+
+
+@workflow_group.command(name="run")
+@click.argument("name")
+@click.option("--dry-run", is_flag=True, default=False, help="Show what would run without executing")
+@click.option("-y", "--yes", is_flag=True, default=False, help="Skip confirmation")
+@click.pass_context
+def workflow_run(ctx: click.Context, name: str, dry_run: bool, yes: bool) -> None:
+    """Execute a workflow by name.
+
+    NAME is the workflow filename without .md extension.
+
+    Examples:
+
+      swarm workflow run oauth2-flow
+
+      swarm workflow run deploy --dry-run
+
+      swarm workflow run weekly-report --yes
+    """
+    from . import workflows as _wf
+    paths = _get_paths(ctx.obj["path"])
+
+    try:
+        wf = _wf.load_workflow(paths, name)
+    except FileNotFoundError:
+        click.echo(f"Workflow '{name}' not found.", err=True)
+        raise SystemExit(1)
+
+    prefix = "[dry-run] " if dry_run else ""
+    click.echo(f"\n{prefix}Workflow: {wf.name}  [{wf.pattern}]  {len(wf.steps)} steps\n")
+    for step in wf.steps:
+        click.echo(f"  {step.number}. {step.command}  (agent: {step.agent})")
+    click.echo("")
+
+    if not yes and not dry_run:
+        click.confirm("Execute workflow?", abort=True)
+
+    run = _wf.run_workflow(paths, name, dry_run=dry_run)
+
+    click.echo(f"\nResults ({run.summary}):\n")
+    for sr in run.step_results:
+        icon = "⊘" if sr.skipped else ("✓" if sr.ok else "✗")
+        note = f" — {sr.skip_reason}" if sr.skipped else f" (exit {sr.exit_code})"
+        click.echo(f"  {icon} step {sr.step_number}: {sr.command}{note}")
+        if sr.stdout:
+            for line in sr.stdout.splitlines()[:5]:
+                click.echo(f"    {line}")
+    click.echo("")
+
+    if not run.ok:
+        raise SystemExit(1)
+
+
+@workflow_group.command(name="status")
+@click.argument("name")
+@click.pass_context
+def workflow_status_cmd(ctx: click.Context, name: str) -> None:
+    """Show last run status for a workflow."""
+    from . import workflows as _wf
+    paths = _get_paths(ctx.obj["path"])
+    status = _wf.workflow_status(paths, name)
+    if not status:
+        click.echo(f"No run history for workflow '{name}'.")
+        return
+    ok_icon = "✓" if status.get("ok") else "✗"
+    click.echo(f"\n{ok_icon} {name}  last ran: {status.get('started_at', '?')}  →  {status.get('summary', '?')}\n")
+    for step in status.get("steps", []):
+        skip_note = " [skipped]" if step.get("skipped") else f" (exit {step.get('exit', '?')})"
+        click.echo(f"  step {step['n']}: {step['cmd']}{skip_note}")
+    click.echo("")
+
+
+@workflow_group.command(name="create")
+@click.argument("name")
+@click.option("--pattern", default="sequential",
+              type=click.Choice(["sequential", "concurrent", "conditional", "mixture"]),
+              help="Execution pattern")
+@click.option("--trigger", default="manual", help="Trigger: manual, on:done ITEM-ID, or cron expr")
+@click.option("--description", default="", help="Short description")
+@click.pass_context
+def workflow_create(ctx: click.Context, name: str, pattern: str, trigger: str, description: str) -> None:
+    """Scaffold a new workflow file in .swarm/workflows/.
+
+    Edit the generated file to fill in steps.
+    """
+    from . import workflows as _wf
+    from .workflows import Workflow, WorkflowStep
+    paths = _get_paths(ctx.obj["path"])
+    wf = Workflow(
+        name=name,
+        trigger=trigger,
+        pattern=pattern,
+        description=description or f"{name} workflow",
+        steps=[
+            WorkflowStep(number=1, command="swarm heal", agent="auto", timeout_min=5),
+            WorkflowStep(number=2, command="# replace with your command", agent="auto"),
+        ],
+    )
+    out = _wf.create_workflow(paths, wf)
+    click.echo(f"✓ Created {out}")
+    click.echo(f"  Edit {out} to define steps, then run: swarm workflow run {name}")
 
 
 # ---------------------------------------------------------------------------
@@ -959,10 +1729,19 @@ def configure() -> None:
 @click.option("--via", "interface", default=None,
               type=click.Choice(["bedrock", "claude", "gemini", "opencode"]),
               help="LLM backend to use (default: from swarm configure, or bedrock)")
+@click.option("--chain", is_flag=True, default=False,
+              help="Auto-chain: keep invoking AI until no more write operations are proposed")
+@click.option("--max-steps", default=5,
+              help="Maximum chain steps when --chain is active (default: 5)")
 @click.pass_context
 def ai_cmd(ctx: click.Context, instruction: str, yes: bool, agent_id: str | None,
-           context_limit: int, interface: str | None) -> None:
+           context_limit: int, interface: str | None,
+           chain: bool, max_steps: int) -> None:
     """Translate a natural language instruction into .swarm/ operations.
+
+    With --chain, the AI is re-invoked after each set of operations using
+    the refreshed .swarm/ context until it produces no further write ops
+    (i.e. the workflow is complete) or --max-steps is reached.
 
     Examples:
       swarm ai "mark ORG-009 as done, blog service is fixed"
@@ -972,23 +1751,18 @@ def ai_cmd(ctx: click.Context, instruction: str, yes: bool, agent_id: str | None
       swarm ai "update my focus to the markets ASGI fix" --yes
       swarm ai "what should I work on?" --via claude
       swarm ai "add a queue item for OAuth" --via gemini
+      swarm ai "run the OAuth2 workflow end to end" --chain --yes
+      swarm ai "implement auth, then markets, then geo" --chain --max-steps 9 --yes
     """
     from . import bedrock as _bedrock
     from . import ai_ops as _ai
 
-    paths  = _get_paths(ctx.obj["path"])
-    agent  = agent_id or _default_agent()
-    cfg    = _bedrock.load_config()
-
-    # Resolve interface: --via flag > config > bedrock default
+    paths    = _get_paths(ctx.obj["path"])
+    agent    = agent_id or _default_agent()
+    cfg      = _bedrock.load_config()
     resolved = interface or cfg.get("interface", "bedrock")
 
-    # Build context and prompt
-    context  = _ai.build_context_bundle(paths, context_limit=context_limit)
-    user_msg = f"Instruction: {instruction}\n\n{context}"
-
-    # Invoke the chosen backend
-    try:
+    def _invoke(user_msg: str) -> dict:
         if resolved == "bedrock":
             try:
                 import boto3  # noqa: F401
@@ -996,53 +1770,93 @@ def ai_cmd(ctx: click.Context, instruction: str, yes: bool, agent_id: str | None
                 click.echo("Error: boto3 not installed. Run: pip install 'dot-swarm[ai]'", err=True)
                 raise SystemExit(1)
             client = _bedrock.get_bedrock_client(cfg["region"])
-            result = _ai.invoke_ai(client, cfg["model"], user_msg)
-        else:
-            result = _ai.invoke_via_cli(resolved, user_msg)
-    except FileNotFoundError as e:
-        click.echo(f"Error: {e}", err=True)
-        raise SystemExit(1)
-    except Exception as e:
-        kind = type(e).__name__
-        if "NoCredentials" in kind or "CredentialRetrieval" in kind:
-            click.echo("Error: No AWS credentials. Run 'swarm configure' or set AWS_* env vars.", err=True)
-        elif "AccessDenied" in str(e) or "Authorization" in str(e):
-            click.echo("Error: Bedrock access denied. Run 'swarm configure' to troubleshoot.", err=True)
-        else:
-            click.echo(f"Error: {kind}: {e}", err=True)
-        raise SystemExit(1)
+            return _ai.invoke_ai(client, cfg["model"], user_msg)
+        return _ai.invoke_via_cli(resolved, user_msg)
 
-    commentary = result.get("commentary", "")
-    ops        = result.get("operations", [])
+    step = 0
+    current_instruction = instruction
+    total_ops_executed = 0
 
-    if not ops:
-        click.echo(f"\n{commentary}")
-        return
+    while True:
+        step += 1
+        if chain and step > 1:
+            click.echo(f"\n── Chain step {step} ──────────────────────────────────────")
 
-    # Separate respond ops (informational) from file-write ops
-    respond_ops = [o for o in ops if o.get("op") == "respond"]
-    write_ops   = [o for o in ops if o.get("op") != "respond"]
+        context  = _ai.build_context_bundle(paths, context_limit=context_limit)
+        user_msg = f"Instruction: {current_instruction}\n\n{context}"
 
-    # Always print respond messages immediately
-    for op in respond_ops:
-        click.echo(f"\n{op['message']}")
+        try:
+            result = _invoke(user_msg)
+        except FileNotFoundError as e:
+            click.echo(f"Error: {e}", err=True)
+            raise SystemExit(1)
+        except Exception as e:
+            kind = type(e).__name__
+            if "NoCredentials" in kind or "CredentialRetrieval" in kind:
+                click.echo("Error: No AWS credentials. Run 'swarm configure' or set AWS_* env vars.", err=True)
+            elif "AccessDenied" in str(e) or "Authorization" in str(e):
+                click.echo("Error: Bedrock access denied. Run 'swarm configure' to troubleshoot.", err=True)
+            else:
+                click.echo(f"Error: {kind}: {e}", err=True)
+            raise SystemExit(1)
 
-    if not write_ops:
-        return
+        commentary = result.get("commentary", "")
+        ops        = result.get("operations", [])
 
-    # Preview write ops and confirm
-    click.echo("\n" + _ai.format_preview(commentary, write_ops))
+        if not ops:
+            click.echo(f"\n{commentary}")
+            break
 
-    if not yes:
+        respond_ops = [o for o in ops if o.get("op") == "respond"]
+        write_ops   = [o for o in ops if o.get("op") != "respond"]
+
+        for op in respond_ops:
+            click.echo(f"\n{op['message']}")
+
+        if not write_ops:
+            break
+
+        click.echo("\n" + _ai.format_preview(commentary, write_ops))
+
+        if not yes:
+            click.echo()
+            if not click.confirm("  Execute these operations?", default=False):
+                click.echo("  Aborted.")
+                break
+
         click.echo()
-        if not click.confirm("  Execute these operations?", default=False):
-            click.echo("  Aborted.")
-            return
+        exec_results = _ai.execute_operations(paths, write_ops, agent)
+        for r in exec_results:
+            click.echo(r)
+        total_ops_executed += len(write_ops)
 
-    click.echo()
-    results = _ai.execute_operations(paths, write_ops, agent)
-    for r in results:
-        click.echo(r)
+        # Sign and record the batch in the pheromone trail
+        try:
+            from . import signing as _sign
+            record = _sign.sign_operation(
+                paths.root, "ai_batch", agent,
+                {"step": step, "ops": [o.get("op") for o in write_ops]},
+            )
+            _sign.append_trail(paths.root, record)
+        except Exception:
+            pass
+
+        if not chain:
+            break
+
+        if step >= max_steps:
+            click.echo(f"\n  ⚠  Reached --max-steps ({max_steps}). Stopping chain.")
+            break
+
+        # For next chain step, ask AI what to do next given the updated state
+        current_instruction = (
+            f"Continue: {instruction}. "
+            f"Previous step executed {len(write_ops)} operation(s). "
+            "What should happen next? If the work is complete, respond with a summary."
+        )
+
+    if chain and total_ops_executed > 0:
+        click.echo(f"\n  ✓ Chain complete — {total_ops_executed} operation(s) across {step} step(s).")
 
 
 # ---------------------------------------------------------------------------
@@ -1339,6 +2153,119 @@ def _create_platform_shims(repo_root: Path) -> None:
     for filename, content in shims.items():
         path = repo_root / filename
         _create_if_missing(path, content)
+
+def _ensure_gitignore(swarm_dir: Path) -> None:
+    """Ensure .swarm/.gitignore excludes the private signing key and quarantine dir."""
+    gitignore = swarm_dir / ".gitignore"
+    needed = [".signing_key", "quarantine/", "trail.log"]
+    if gitignore.exists():
+        existing = gitignore.read_text()
+        missing = [line for line in needed if line not in existing]
+        if missing:
+            with gitignore.open("a") as fh:
+                fh.write("\n" + "\n".join(missing) + "\n")
+    else:
+        gitignore.write_text("\n".join(needed) + "\n")
+
+
+def _run_local_drift_check(ctx: click.Context, paths: "SwarmPaths") -> None:
+    """Run a local AI-powered code-vs-docs drift check (same logic as GHA workflow)."""
+    import subprocess
+    from . import bedrock as _bedrock
+    from . import ai_ops as _ai
+
+    git_root = _find_git_root()
+    if not git_root:
+        click.echo("  ⚠  Not inside a git repository — skipping diff.")
+        return
+
+    try:
+        diff_result = subprocess.run(
+            ["git", "diff", "--stat", "HEAD~5..HEAD", "--", "."],
+            capture_output=True, text=True, cwd=git_root, timeout=15,
+        )
+        diff_text = diff_result.stdout[:2000] if diff_result.returncode == 0 else "(no diff available)"
+    except Exception:
+        diff_text = "(could not retrieve git diff)"
+
+    context = _ai.build_context_bundle(paths, context_limit=800)
+    drift_prompt = (
+        "You are a drift-check agent. Check whether the .swarm/ project state is "
+        "aligned with recent code changes.\n\n"
+        f"Recent git changes (last 5 commits):\n{diff_text}\n\n"
+        f"Current .swarm/ state:\n{context}\n\n"
+        "Report:\n"
+        "1. Work items in queue.md that look stale given these code changes.\n"
+        "2. Code changes not reflected in any queue item.\n"
+        "3. State.md fields that appear out of date.\n"
+        "Reply with a brief bullet list, or 'No drift detected.' if everything is aligned."
+    )
+
+    cfg = _bedrock.load_config()
+    resolved = cfg.get("interface", "bedrock")
+
+    try:
+        if resolved == "bedrock":
+            try:
+                import boto3  # noqa: F401
+                client = _bedrock.get_bedrock_client(cfg["region"])
+                response = client.converse(
+                    modelId=cfg["model"],
+                    messages=[{"role": "user", "content": [{"text": drift_prompt}]}],
+                    inferenceConfig={"maxTokens": 512, "temperature": 0.0},
+                )
+                result_text = response["output"]["message"]["content"][0]["text"]
+            except Exception as e:
+                click.echo(f"  ⚠  Bedrock drift check failed: {e}")
+                return
+        else:
+            result = _ai.invoke_via_cli(resolved, drift_prompt)
+            result_text = result.get("commentary", "") or str(result)
+        click.echo(result_text)
+    except Exception as e:
+        click.echo(f"  ⚠  Drift check error: {e}")
+
+
+def _quarantine_findings(
+    paths: "SwarmPaths",
+    div_root: Path,
+    findings: list,
+) -> None:
+    """Back up files with adversarial findings to .swarm/quarantine/ for human review.
+
+    We do NOT auto-delete content — humans must review and excise injections.
+    The backup provides a dated record and preserves the original for forensics.
+    """
+    quarantine_dir = paths.root / "quarantine"
+    quarantine_dir.mkdir(exist_ok=True)
+
+    ts = datetime.utcnow().strftime("%Y%m%dT%H%MZ")
+    by_source: dict[str, list] = {}
+    for f in findings:
+        by_source.setdefault(f.source, []).append(f)
+
+    for source, src_findings in by_source.items():
+        if source.startswith("workflows/"):
+            fpath = paths.workflows / source[len("workflows/"):]
+        elif source in ("CLAUDE.md", ".windsurfrules", ".cursorrules",
+                        ".github/copilot-instructions.md"):
+            fpath = div_root / source
+        else:
+            fpath = paths.root / source
+
+        if not fpath.exists():
+            continue
+
+        safe_name = source.replace("/", "_").replace(".", "_")
+        backup = quarantine_dir / f"{ts}_{safe_name}.bak"
+        backup.write_text(fpath.read_text(encoding="utf-8", errors="replace"))
+
+        categories = ", ".join(sorted({f.category for f in src_findings}))
+        click.echo(f"     {source} → quarantine/{backup.name}  [{categories}]")
+
+    click.echo("  ⚠  Flagged files backed up. Review quarantine/ and remove injections manually.")
+    click.echo("     Run 'swarm heal' again after cleaning to confirm resolution.")
+
 
 if __name__ == "__main__":
     cli(obj={})
