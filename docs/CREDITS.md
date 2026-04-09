@@ -1,6 +1,6 @@
 # Credits & Inspirations
 
-SwarmCity stands on the shoulders of decades of research into how complex,
+dot_swarm stands on the shoulders of decades of research into how complex,
 coordinated behavior emerges from simple local interactions — no central
 command required.
 
@@ -15,14 +15,14 @@ command required.
 
 Steve Yegge's January 2026 essay
 ["Welcome to Gas Town"](https://steve-yegge.medium.com/welcome-to-gas-town-4f25ee16dd04)
-is the direct inspiration for SwarmCity's design philosophy. The essay
+is the direct inspiration for dot_swarm's design philosophy. The essay
 describes coordinating large fleets of Claude Code agents across a real
 software organization — naming the challenge of making agent work
 **idempotent under nondeterminism**, and introducing the notion of
 **MEOW (Molecular Expression of Work)** as the unit of agent-driven
 progress.
 
-SwarmCity's `.swarm/` directory, `queue.md` lifecycle, and item-ID
+dot_swarm's `.swarm/` directory, `queue.md` lifecycle, and item-ID
 convention are a direct implementation of the patterns Yegge describes:
 small, claimable units of work that agents can pick up, checkpoint, and
 hand off without stepping on each other.
@@ -31,7 +31,7 @@ hand off without stepping on each other.
 
 ## The Biological Argument
 
-Central coordination is expensive. In the natural systems that inspired SwarmCity,
+Central coordination is expensive. In the natural systems that inspired dot_swarm,
 it is avoided almost universally — and in the rare cases where a "central" figure
 exists, the burden of coordination is not placed on that figure at all.
 

@@ -1,11 +1,11 @@
-# SwarmCity — Implementation Bible
+# dot_swarm — Implementation Bible
 
 **Version**: 0.3.0
 **Status**: Phase 1 (operational)
 **Last updated**: 2026-03-30
 **Author**: human-ML + claude-code
 
-This document is the single source of truth for the SwarmCity project. It covers the
+This document is the single source of truth for the dot_swarm project. It covers the
 full architecture, all conventions, the CLI and MCP tool designs, implementation phases,
 and handoff guides. Read this before starting any work on the tools.
 
@@ -13,7 +13,7 @@ and handoff guides. Read this before starting any work on the tools.
 
 ## Table of Contents
 
-1. [What SwarmCity Is](#1-what-swarmcity-is)
+1. [What dot_swarm Is](#1-what-dot_swarm-is)
 2. [Relationship to Gastown](#2-relationship-to-gastown)
 3. [Core Concepts](#3-core-concepts)
 4. [Directory Structure](#4-directory-structure)
@@ -28,9 +28,9 @@ and handoff guides. Read this before starting any work on the tools.
 
 ---
 
-## 1. What SwarmCity Is
+## 1. What dot_swarm Is
 
-SwarmCity is a **minimal, git-native, markdown-first agent orchestration layer** for
+dot_swarm is a **minimal, git-native, markdown-first agent orchestration layer** for
 multi-repo software organizations. It replaces heavyweight issue trackers and
 project management tools with a set of conventions, a small CLI, and an MCP server.
 
@@ -64,12 +64,12 @@ based issue tracker), which failed due to:
 - Non-standard vocabulary
 - Binary state that agents couldn't read directly
 
-**SwarmCity** is the first reference implementation of the Gastown architecture that's
+**dot_swarm** is the first reference implementation of the Gastown architecture that's
 worth keeping. It reuses Gastown concepts (pheromone trails, claim patterns, hierarchical
 coordinators) but implements them purely in markdown + git.
 
 Gastown continues as the conceptual umbrella. Future implementations (with schedulers,
-UIs, or event buses) would be "Gastown architectures." SwarmCity is the minimal baseline.
+UIs, or event buses) would be "Gastown architectures." dot_swarm is the minimal baseline.
 
 ---
 

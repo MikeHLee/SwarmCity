@@ -1,4 +1,4 @@
-# Queue — SwarmCity (Organization Level)
+# Queue — dot_swarm (Organization Level)
 
 Items are listed in priority order within each section.
 Item IDs: `SWC-<3-digit-number>` — assigned sequentially, never reused.

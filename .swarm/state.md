@@ -1,4 +1,4 @@
-# State — SwarmCity
+# State — dot_swarm
 
 **Last touched**: 2026-04-06T16:30Z by cascade
 **Current focus**: All integration phases complete (SWC-013/014/015). 195 tests passing.

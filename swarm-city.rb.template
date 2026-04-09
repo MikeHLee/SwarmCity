@@ -1,8 +1,8 @@
-class SwarmCity < Formula
+class DotSwarm < Formula
   include Language::Python::Virtualenv
 
   desc "Minimal, git-native, markdown-first agent orchestration"
-  homepage "https://github.com/MikeHLee/SwarmCity"
+  homepage "https://github.com/MikeHLee/dot_swarm"
   url "https://files.pythonhosted.org/packages/source/s/swarm-city/swarm-city-0.2.0.tar.gz"
   sha256 "REPLACE_WITH_SHA256_AFTER_PYPI_PUBLISH"
   license "MIT"

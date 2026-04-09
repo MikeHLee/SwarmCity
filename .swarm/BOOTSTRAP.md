@@ -1,4 +1,4 @@
-# SwarmCity Bootstrap — SwarmCity
+# .swarm Bootstrap — dot_swarm
 
 See `oasis-x/.swarm/BOOTSTRAP.md` for the full protocol.
 

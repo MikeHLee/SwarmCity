@@ -1,4 +1,4 @@
-# Context — SwarmCity
+# Context — dot_swarm
 
 **Level**: Organization
 **Division code**: SWC
@@ -6,7 +6,7 @@
 
 ## What This Division Is
 
-SwarmCity is a minimal, git-native, markdown-first agent orchestration system for multi-repo organizations. It uses a nature-inspired "pheromone trail" approach where coordination state lives in `.swarm/` directories as plain markdown files.
+dot_swarm is a minimal, git-native, markdown-first agent orchestration system for multi-repo organizations. It uses a nature-inspired "pheromone trail" approach where coordination state lives in `.swarm/` directories as plain markdown files.
 
 ## Architecture Constraints
 

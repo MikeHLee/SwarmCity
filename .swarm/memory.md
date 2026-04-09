@@ -1,4 +1,4 @@
-# Memory — SwarmCity
+# Memory — dot_swarm
 
 Append-only. Non-obvious decisions, constraints, and rationale.
 Format: `## <ISO8601-date> — <topic> (<agent-id>)`
@@ -9,7 +9,7 @@ Format: `## <ISO8601-date> — <topic> (<agent-id>)`
 
 **Decision**: Pursue two separate papers rather than a single combined submission.
 
-**Why**: The stigmergy contribution (SwarmCity orchestration protocol) and the Boids looping
+**Why**: The stigmergy contribution (dot_swarm orchestration protocol) and the Boids looping
 contribution (gen_logo.py physics pipeline) have entirely different audiences, venues, and
 evaluation requirements. Bundling them would weaken both: AAMAS reviewers don't care about
 GIF loop fidelity; SIGGRAPH Talks reviewers don't care about multi-agent file locking.

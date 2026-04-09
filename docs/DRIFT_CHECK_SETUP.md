@@ -1,4 +1,4 @@
-# SwarmCity Drift Check — Setup Guide
+# dot_swarm Drift Check — Setup Guide
 
 The `swarm-drift-check.yml` workflow uses **AWS Bedrock (Amazon Nova Micro)** to assess
 documentation drift between code changes and `.swarm/` state on every merge to `dev`/`prod`.

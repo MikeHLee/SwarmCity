@@ -1,4 +1,4 @@
-# SwarmCity Platform Setup
+# dot_swarm Platform Setup
 
 Copy-paste shim templates for each agent platform. Each shim is a thin one-liner
 (or small config block) that points agents at `.swarm/BOOTSTRAP.md`. The protocol
@@ -18,7 +18,7 @@ Active context: @.swarm/context.md | State: @.swarm/state.md | Queue: @.swarm/qu
 For the org root (oasis-x/) where CLAUDE.md may contain other content, append:
 
 ```markdown
-## SwarmCity Protocol
+## .swarm Protocol
 See @.swarm/BOOTSTRAP.md — follow the On Start / During Work / On Stop protocol
 before beginning any task.
 ```
@@ -66,7 +66,7 @@ Option B — Per-project (if Gemini CLI supports project configs):
 Create `.gemini/config.yaml` at repo root:
 ```yaml
 system_prompt_append: |
-  Read .swarm/BOOTSTRAP.md and follow the SwarmCity protocol before starting any task.
+  Read .swarm/BOOTSTRAP.md and follow the .swarm protocol before starting any task.
 ```
 
 ---
@@ -76,7 +76,7 @@ system_prompt_append: |
 OpenCode supports `.opencode/rules.md` at the project root.
 
 ```markdown
-# SwarmCity Protocol
+# .swarm Protocol
 
 Read `.swarm/BOOTSTRAP.md` before starting any task in this repository.
 Follow the On Start → During Work → On Stop protocol. Update state.md when
@@ -85,14 +85,14 @@ starting and finishing. Claim items from queue.md before implementing.
 
 ---
 
-## SwarmCity MCP (Claude Code / Windsurf / Cursor)
+## dot_swarm MCP (Claude Code / Windsurf / Cursor)
 
 Install the MCP server once, configure per-project.
 
 ### Installation
 
 ```bash
-cd oasis-x/swarm-city
+cd dot_swarm
 pip install -e mcp/
 ```
 
@@ -103,9 +103,9 @@ Add to `~/.claude/settings.json` (global) or `.claude/settings.json` (project):
 ```json
 {
   "mcpServers": {
-    "swarm-city": {
+    "dot-swarm": {
       "command": "python",
-      "args": ["-m", "swarm_city_mcp"],
+      "args": ["-m", "dot_swarm_mcp"],
       "env": {
         "SWARM_ROOT": "/Users/yourname/Documents/Runes/oasis-x"
       }
@@ -117,7 +117,7 @@ Add to `~/.claude/settings.json` (global) or `.claude/settings.json` (project):
 ### Windsurf / Cursor MCP
 
 Configure via the platform's MCP settings panel. Use:
-- **Command**: `python -m swarm_city_mcp`
+- **Command**: `python -m dot_swarm_mcp`
 - **Env**: `SWARM_ROOT=/path/to/oasis-x`
 
 ---
