@@ -1,8 +1,8 @@
-site_name: SwarmCity
+site_name: dot_swarm
 site_description: Minimal, git-native, markdown-first agent orchestration for multi-repo organizations.
-site_url: https://mikehlee.github.io/SwarmCity/
-repo_url: https://github.com/MikeHLee/SwarmCity
-repo_name: MikeHLee/SwarmCity
+site_url: https://mikehlee.github.io/dot_swarm/
+repo_url: https://github.com/MikeHLee/dot_swarm
+repo_name: MikeHLee/dot_swarm
 edit_uri: edit/main/docs/
 
 theme:

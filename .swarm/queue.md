@@ -125,6 +125,72 @@ Item IDs: `SWC-<3-digit-number>` — assigned sequentially, never reused.
              Decision: blog-first, no package until API is validated by readers.
              Blocks: SWC-008 (needs eval harness from Phase 2 refactor).
 
+<!-- ═══════════════ AGENT ROLES + MULTI-AGENT TOOLING ═══════════════ -->
+
+- [x] [SWC-016] [DONE · 2026-04-18T00:00Z] Fix mkdocs.yml stale SwarmCity → dot_swarm URLs
+      project: docs
+      priority: high
+      notes: site_url, repo_url, repo_name all updated; gh-pages branch already exists on MikeHLee/dot_swarm
+
+- [ ] [SWC-017] [OPEN] swarm ready — dependency-aware work discovery (like bd ready)
+      project: cli-roles
+      priority: high
+      notes: DONE in this session — lists OPEN pending items with all deps completed.
+             swarm ready / swarm ready --json. See operations.ready_items().
+
+- [ ] [SWC-018] [OPEN] Role system infrastructure: roles.py + swarm role enable/disable/show/list
+      project: cli-roles
+      priority: high
+      notes: DONE in this session — roles.py: RoleConfig, enable_role, disable_role, load_role,
+             is_role_enabled, list_roles, validate_proof, check_escalation.
+             CLI: swarm role list/enable/disable/show.
+             Roles stored in .swarm/roles/<name>.json (toggled without touching queue.md).
+
+- [ ] [SWC-019] [OPEN] Inspector role — proof-of-work gate, swarm inspect --pass/--fail
+      project: cli-roles
+      priority: high
+      notes: DONE in this session — WorkItem gains proof: + inspect_fails: fields.
+             swarm partial <id> --proof "branch:X commit:Y tests:N/N" (worker attaches evidence).
+             swarm done now blocked when inspector enabled + proof missing (--force to override).
+             swarm inspect <id> --pass|--fail --reason <text> (inspector agent verifies).
+             reopen_item() in operations.py: clears proof, increments inspect_fails, moves to OPEN.
+             Escalates to watchdog after max_iterations (default 3) if watchdog role is enabled.
+
+- [ ] [SWC-020] [OPEN] Watchdog role — escalate stuck items to human when worker+inspector loop
+      project: cli-roles
+      priority: medium
+      notes: Escalation already triggered in swarm inspect --fail when inspect_fails >= max_iterations
+             and watchdog role is enabled. Needs: swarm watchdog report (list all escalated items),
+             dedicated escalation log (.swarm/escalations.md), optional Slack/GitHub Issues webhook.
+
+- [ ] [SWC-021] [OPEN] Supervisor role — holistic progress view + human-director briefs
+      project: cli-roles
+      priority: medium
+      notes: swarm supervisor report (all active items + phase progress across queue sections),
+             swarm supervisor brief --format md (structured summary for human director).
+             Should aggregate across ascend/descend hierarchy too.
+
+- [ ] [SWC-022] [OPEN] Librarian role — catalog directory tree into .swarm/ context + queue
+      project: cli-roles
+      priority: medium
+      notes: swarm librarian catalog (walk dir tree, append undocumented modules to context.md,
+             create OPEN queue items for undocumented files). swarm librarian diff (files not
+             referenced in any queue item). Conflicts raised to watchdog if role enabled.
+
+- [ ] [SWC-023] [OPEN] tmux worker spawning — swarm spawn <id> [--agent opencode|claude|ollama]
+      project: cli-roles
+      priority: high
+      notes: Opens named tmux window, boots agent with SWARM_AGENT_ID set, claims item automatically.
+             swarm spawn SWC-042 --agent opencode → tmux new-window -n SWC-042 "opencode ...".
+             Needed to make the inspector/worker loop fully automated end-to-end.
+
+- [ ] [SWC-024] [OPEN] Merge queue (lightweight Refinery) — serialize concurrent branch merges
+      project: cli-roles
+      priority: low
+      notes: Gastown's Refinery role manages merge queue to prevent parallel worker collisions.
+             dot_swarm equivalent: .swarm/merge_queue.md + swarm merge enqueue/next/pop.
+             Lower priority since single-master git workflows mostly avoid this problem.
+
 <!-- ═══════════════ DISTRIBUTION ═══════════════ -->
 
 - [ ] [SWC-003] [OPEN] Configure Trusted Publishing (OIDC) on PyPI

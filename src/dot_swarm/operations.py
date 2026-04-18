@@ -27,7 +27,7 @@ from .models import (
 # ---------------------------------------------------------------------------
 
 SECTION_RE = re.compile(r"^## (Active|Pending|Done)$", re.MULTILINE)
-FIELD_RE = re.compile(r"^\s{6}(?P<key>priority|project|notes|depends|refs): (?P<value>.+)$")
+FIELD_RE = re.compile(r"^\s{6}(?P<key>priority|project|notes|depends|refs|proof|inspect_fails): (?P<value>.+)$")
 
 
 def read_queue(paths: SwarmPaths) -> tuple[list[WorkItem], list[WorkItem], list[WorkItem]]:
@@ -91,6 +91,13 @@ def _parse_items(section_text: str) -> list[WorkItem]:
                 current_item.depends = [d.strip() for d in value.split(",")]
             elif key == "refs":
                 current_item.refs = [r.strip() for r in value.split(",")]
+            elif key == "proof":
+                current_item.proof = value
+            elif key == "inspect_fails":
+                try:
+                    current_item.inspect_fails = int(value)
+                except ValueError:
+                    pass
     return items
 
 
@@ -251,6 +258,52 @@ def add_item(
     pending.append(item)
     write_queue(paths, active, pending, done)
     return item
+
+
+# ---------------------------------------------------------------------------
+# Ready / reopen
+# ---------------------------------------------------------------------------
+
+def ready_items(paths: SwarmPaths) -> list[WorkItem]:
+    """Return OPEN pending items with all dependencies completed (à la `bd ready`)."""
+    active, pending, done = read_queue(paths)
+    done_ids = {i.id for i in done}
+    result = []
+    for item in pending:
+        if item.state != ItemState.OPEN:
+            continue
+        if not item.depends or all(dep in done_ids for dep in item.depends):
+            result.append(item)
+    return result
+
+
+def reopen_item(
+    paths: SwarmPaths,
+    item_id: str,
+    inspector_id: str,
+    reason: str,
+) -> WorkItem:
+    """Re-open an item after Inspector rejection. Clears proof, increments inspect_fails."""
+    active, pending, done = read_queue(paths)
+    target = _find_item(active + pending, item_id)
+    if target is None:
+        raise ValueError(f"Item {item_id} not found in active or pending queue.")
+
+    target.inspect_fails += 1
+    target.proof = ""
+    target.state = ItemState.OPEN
+    target.claimed_by = None
+    target.claimed_at = None
+    fail_note = f"inspector-fail-{target.inspect_fails}: {reason} (by {inspector_id})"
+    target.notes = (target.notes + " | " + fail_note).strip(" | ") if target.notes else fail_note
+
+    # Move back to pending
+    active = [i for i in active if i.id != item_id]
+    if target not in pending:
+        pending.append(target)
+
+    write_queue(paths, active, pending, done)
+    return target
 
 
 # ---------------------------------------------------------------------------

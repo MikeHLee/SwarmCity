@@ -13,9 +13,9 @@ import click
 from .models import ItemState, Priority, SwarmPaths
 from .operations import (
     add_item, append_memory, audit, block_item, claim_item, done_item,
-    next_item_id, partial_item, read_queue, read_state, write_state,
-    _division_code_from_paths, discover_divisions, find_parent_paths,
-    get_alignment, get_colony_summary,
+    next_item_id, partial_item, ready_items, reopen_item, read_queue,
+    read_state, write_state, _division_code_from_paths, discover_divisions,
+    find_parent_paths, get_alignment, get_colony_summary,
 )
 
 
@@ -224,6 +224,45 @@ def status(ctx: click.Context, show_all: bool) -> None:
 
 
 # ---------------------------------------------------------------------------
+# swarm ready  (like `bd ready` — dependency-aware work discovery)
+# ---------------------------------------------------------------------------
+
+@cli.command()
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON array")
+@click.pass_context
+def ready(ctx: click.Context, as_json: bool) -> None:
+    """List OPEN items with all dependencies satisfied — safe to pick up now.
+
+    Equivalent to `bd ready` in the Beads/Gastown ecosystem: only items whose
+    entire depends: chain is in the Done section are shown.
+
+    Examples:
+      swarm ready            # human-readable list
+      swarm ready --json     # machine-readable for agent scripts
+    """
+    import json as _json
+    paths = _get_paths(ctx.obj["path"])
+    items = ready_items(paths)
+    if as_json:
+        click.echo(_json.dumps([
+            {"id": i.id, "description": i.description,
+             "priority": i.priority.value, "project": i.project}
+            for i in items
+        ], indent=2))
+        return
+    if not items:
+        click.echo("No items ready — all open items have unresolved dependencies.")
+        return
+    click.echo(f"Ready for pickup ({len(items)}):")
+    for item in items:
+        dep_str = f"  depends: {', '.join(item.depends)}" if item.depends else ""
+        click.echo(
+            f"  [{item.id}] [{item.priority.value.upper()}] {item.description}"
+            + (f"\n{dep_str}" if dep_str else "")
+        )
+
+
+# ---------------------------------------------------------------------------
 # swarm claim
 # ---------------------------------------------------------------------------
 
@@ -258,12 +297,41 @@ def claim(ctx: click.Context, item_id: str, agent: str | None) -> None:
 @click.option("--agent", default=None)
 @click.option("--note", default="", help="Brief completion note")
 @click.option("--next", "next_focus", default=None, help="Set state.md next focus")
+@click.option("--force", is_flag=True, default=False,
+              help="Bypass Inspector proof requirement (human override)")
 @click.pass_context
-def done(ctx: click.Context, item_id: str, agent: str | None,
-         note: str, next_focus: str | None) -> None:
-    """Mark a work item as done."""
+def done(ctx: click.Context, item_id: str, agent: str | None, note: str,
+         next_focus: str | None, force: bool) -> None:
+    """Mark a work item as done.
+
+    When the Inspector role is enabled, workers cannot mark items done directly —
+    they must use 'swarm partial --proof ...' and let the inspector verify via
+    'swarm inspect --pass'. Use --force to override as a human director.
+    """
     paths = _get_paths(ctx.obj["path"])
     agent_id = agent or _default_agent()
+
+    # Inspector gate: workers must go through swarm inspect, not swarm done
+    if not force:
+        from . import roles as _roles
+        if _roles.is_role_enabled(paths, "inspector"):
+            active, pending, _ = read_queue(paths)
+            target = next((i for i in active + pending if i.id == item_id), None)
+            if target:
+                role = _roles.load_role(paths, "inspector")
+                missing = _roles.validate_proof(target.proof, role.require_proof_fields)
+                if missing:
+                    click.echo(
+                        f"Inspector role is enabled — '{item_id}' requires proof before done.\n"
+                        f"  Missing fields: {', '.join(missing)}\n"
+                        f"  Run: swarm partial {item_id} --proof "
+                        f"\"branch:<name> commit:<sha> tests:<N/N>\"\n"
+                        f"  Then an inspector agent runs: swarm inspect {item_id} --pass\n"
+                        f"  Or bypass with: swarm done {item_id} --force",
+                        err=True,
+                    )
+                    sys.exit(1)
+
     try:
         item = done_item(paths, item_id, agent_id, note)
         updates: dict = {"last_agent": agent_id}
@@ -1593,13 +1661,47 @@ def ls_cmd(ctx: click.Context, section: str, priority: str | None, project: str 
 @click.argument("item_id")
 @click.option("--note", default="", help="Checkpoint note")
 @click.option("--agent", "agent_id", default=None, help="Agent ID override")
+@click.option(
+    "--proof", default="",
+    help=(
+        "Evidence for Inspector verification. "
+        "Format: 'branch:<name> commit:<sha> tests:<N/N>'. "
+        "Required when the Inspector role is enabled."
+    ),
+)
 @click.pass_context
-def partial(ctx: click.Context, item_id: str, note: str, agent_id: str | None) -> None:
-    """Mark a claimed item as partially done (checkpoint)."""
+def partial(ctx: click.Context, item_id: str, note: str, agent_id: str | None,
+            proof: str) -> None:
+    """Mark a claimed item as partially done (checkpoint).
+
+    When the Inspector role is enabled, supply --proof so the inspector
+    agent can verify completion before the item is marked done.
+
+    Example:
+      swarm partial SWC-042 --proof "branch:feature/oauth2 commit:abc1234 tests:42/42"
+    """
     paths = _get_paths(ctx.obj["path"])
     agent = agent_id or _default_agent()
     try:
         item = partial_item(paths, item_id, agent, note)
+        if proof:
+            from . import roles as _roles
+            # Re-read after partial_item wrote the queue, then attach proof
+            active2, pending2, done2 = read_queue(paths)
+            target = next((i for i in active2 + pending2 if i.id == item_id), None)
+            if target:
+                target.proof = proof
+                write_queue(paths, active2, pending2, done2)
+            click.echo(f"Partial [{item.id}]: proof attached.")
+            # Validate against inspector requirements
+            role = _roles.load_role(paths, "inspector")
+            if role:
+                missing = _roles.validate_proof(proof, role.require_proof_fields)
+                if missing:
+                    click.echo(
+                        f"  Warning: proof missing required fields: {', '.join(missing)}. "
+                        "Inspector may reject."
+                    )
     except ValueError as e:
         click.echo(f"Error: {e}", err=True)
         raise SystemExit(1)
@@ -1624,6 +1726,194 @@ def block(ctx: click.Context, item_id: str, reason: str) -> None:
         raise SystemExit(1)
     click.echo(f"Blocked [{item.id}]: {item.description}")
     click.echo(f"  Reason: {reason}")
+
+
+# ---------------------------------------------------------------------------
+# swarm inspect  (Inspector role — verify worker proof, pass or fail)
+# ---------------------------------------------------------------------------
+
+@cli.command()
+@click.argument("item_id")
+@click.option("--pass", "verdict", flag_value="pass", help="Accept proof — mark item done")
+@click.option("--fail", "verdict", flag_value="fail", help="Reject proof — reopen to worker")
+@click.option("--reason", default="", help="Reason for failure (required with --fail)")
+@click.option("--agent", default=None, help="Inspector agent ID override")
+@click.pass_context
+def inspect(ctx: click.Context, item_id: str, verdict: str | None,
+            reason: str, agent: str | None) -> None:
+    """Verify a worker's proof-of-work and pass or fail the item.
+
+    Inspector role must be enabled ('swarm role enable inspector').
+    Workers supply proof via 'swarm partial <id> --proof "..."'.
+
+    Examples:
+      swarm inspect SWC-042 --pass
+      swarm inspect SWC-042 --fail --reason "Tests failed on edge case X"
+    """
+    from . import roles as _roles
+    from . import signing as _sign
+
+    paths = _get_paths(ctx.obj["path"])
+    inspector_id = agent or _default_agent()
+
+    if not _roles.is_role_enabled(paths, "inspector"):
+        click.echo(
+            "Inspector role is not enabled. Run: swarm role enable inspector", err=True
+        )
+        sys.exit(1)
+
+    if verdict is None:
+        click.echo("Specify --pass or --fail.", err=True)
+        sys.exit(1)
+
+    role = _roles.load_role(paths, "inspector")
+
+    active, pending, _ = read_queue(paths)
+    target = next((i for i in active + pending if i.id == item_id), None)
+    if target is None:
+        click.echo(f"Error: {item_id} not found in active or pending queue.", err=True)
+        sys.exit(1)
+
+    if verdict == "pass":
+        missing = _roles.validate_proof(target.proof, role.require_proof_fields)
+        if missing:
+            click.echo(
+                f"Warning: proof is missing fields {missing}. Passing anyway (inspector override)."
+            )
+        item = done_item(paths, item_id, inspector_id,
+                         note=f"inspector-pass by {inspector_id}")
+        write_state(paths, {"last_agent": inspector_id})
+        record = _sign.sign_operation(paths.root, "inspect_pass", inspector_id,
+                                      {"item_id": item_id})
+        _sign.append_trail(paths.root, record)
+        click.echo(f"Passed: [{item_id}] {item.description}")
+
+    else:  # fail
+        if not reason:
+            click.echo("--reason is required with --fail.", err=True)
+            sys.exit(1)
+        item = reopen_item(paths, item_id, inspector_id, reason)
+        record = _sign.sign_operation(paths.root, "inspect_fail", inspector_id,
+                                      {"item_id": item_id, "reason": reason})
+        _sign.append_trail(paths.root, record)
+        click.echo(f"Rejected: [{item_id}] re-opened. Fail #{item.inspect_fails}.")
+        click.echo(f"  Reason: {reason}")
+
+        if _roles.check_escalation(item.inspect_fails, role.max_iterations):
+            if _roles.is_role_enabled(paths, "watchdog"):
+                click.echo(
+                    f"\n  Watchdog alert: {item_id} has failed inspection "
+                    f"{item.inspect_fails}/{role.max_iterations} times. "
+                    "Human review required."
+                )
+            else:
+                click.echo(
+                    f"\n  Max iterations reached ({item.inspect_fails}/{role.max_iterations}). "
+                    "Enable the watchdog role or resolve manually: swarm role enable watchdog"
+                )
+
+
+# ---------------------------------------------------------------------------
+# swarm role  (role management)
+# ---------------------------------------------------------------------------
+
+@cli.group()
+@click.pass_context
+def role(ctx: click.Context) -> None:
+    """Manage agent roles (inspector, watchdog, supervisor, librarian).
+
+    Roles extend swarm coordination with structured behaviors without
+    touching queue.md. Toggle them on/off at any time.
+
+    Examples:
+      swarm role list
+      swarm role enable inspector --max-iterations 3
+      swarm role show inspector
+      swarm role disable inspector
+    """
+
+
+@role.command(name="list")
+@click.pass_context
+def role_list(ctx: click.Context) -> None:
+    """List configured roles and their status."""
+    from . import roles as _roles
+    paths = _get_paths(ctx.obj["path"])
+    configured = _roles.list_roles(paths)
+    all_names = sorted(_roles.KNOWN_ROLES)
+    click.echo("Roles:")
+    for name in all_names:
+        cfg = next((r for r in configured if r.name == name), None)
+        if cfg:
+            status = "enabled" if cfg.enabled else "disabled"
+            agent_str = f"  assigned: {cfg.assigned_agent}" if cfg.assigned_agent else ""
+            click.echo(f"  {name:<12} [{status}]{agent_str}")
+        else:
+            click.echo(f"  {name:<12} [not configured]")
+
+
+@role.command(name="enable")
+@click.argument("role_name")
+@click.option("--max-iterations", default=3, show_default=True,
+              help="(inspector) Fail count before watchdog escalation")
+@click.option("--require-proof", default="branch,commit",
+              help="(inspector) Comma-separated required proof fields")
+@click.option("--agent", default=None, help="Assign a specific agent ID to this role")
+@click.pass_context
+def role_enable(ctx: click.Context, role_name: str, max_iterations: int,
+                require_proof: str, agent: str | None) -> None:
+    """Enable a role (or reconfigure it if already enabled)."""
+    from . import roles as _roles
+    paths = _get_paths(ctx.obj["path"])
+    try:
+        cfg = _roles.enable_role(
+            paths, role_name,
+            max_iterations=max_iterations,
+            require_proof_fields=[f.strip() for f in require_proof.split(",") if f.strip()],
+            assigned_agent=agent,
+        )
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+    click.echo(f"Enabled role: {cfg.name}")
+    if role_name == "inspector":
+        click.echo(f"  max_iterations: {cfg.max_iterations}")
+        click.echo(f"  require_proof:  {', '.join(cfg.require_proof_fields)}")
+        click.echo("Workers must now run 'swarm partial <id> --proof \"...\"' before done.")
+    if cfg.assigned_agent:
+        click.echo(f"  assigned_agent: {cfg.assigned_agent}")
+
+
+@role.command(name="disable")
+@click.argument("role_name")
+@click.pass_context
+def role_disable(ctx: click.Context, role_name: str) -> None:
+    """Disable a role by removing its config."""
+    from . import roles as _roles
+    paths = _get_paths(ctx.obj["path"])
+    _roles.disable_role(paths, role_name)
+    click.echo(f"Disabled role: {role_name}")
+
+
+@role.command(name="show")
+@click.argument("role_name")
+@click.pass_context
+def role_show(ctx: click.Context, role_name: str) -> None:
+    """Show full configuration for a role."""
+    import json as _json
+    from . import roles as _roles
+    paths = _get_paths(ctx.obj["path"])
+    cfg = _roles.load_role(paths, role_name)
+    if cfg is None:
+        click.echo(f"Role '{role_name}' is not configured.")
+        return
+    click.echo(f"Role: {cfg.name}")
+    click.echo(f"  enabled:              {cfg.enabled}")
+    click.echo(f"  max_iterations:       {cfg.max_iterations}")
+    click.echo(f"  require_proof_fields: {', '.join(cfg.require_proof_fields)}")
+    click.echo(f"  assigned_agent:       {cfg.assigned_agent or '(any)'}")
+    if cfg.extra:
+        click.echo(f"  extra:                {_json.dumps(cfg.extra)}")
 
 
 # ---------------------------------------------------------------------------

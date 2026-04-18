@@ -1,14 +1,25 @@
 # State — dot_swarm
 
-**Last touched**: 2026-04-06T16:30Z by cascade
-**Current focus**: All integration phases complete (SWC-013/014/015). 195 tests passing.
-**Active items**: (none)
+**Last touched**: 2026-04-18T00:00Z by human-ML
+**Current focus**: Agent roles + multi-agent tooling (SWC-017 through SWC-024)
+**Active items**: (none — SWC-017/018/019 implemented this session, awaiting queue stamp update)
 **Blockers**: PyPI Trusted Publishing not yet configured (manual step for SWC-003)
-**Ready for pickup**: SWC-007 (stigmergy paper — §4 security section now scoped; OGP citation added), SWC-008, SWC-009
+**Ready for pickup**: SWC-020 (watchdog), SWC-021 (supervisor), SWC-022 (librarian), SWC-023 (tmux spawn), SWC-007, SWC-008, SWC-009
 
 ---
 
 ## Handoff Note
+
+**Agent roles + multi-agent tooling implemented (2026-04-18)**:
+New files: `src/dot_swarm/roles.py` — RoleConfig, enable/disable/load/list_roles,
+validate_proof, check_escalation. Four roles defined: inspector, watchdog, supervisor, librarian.
+WorkItem model gains `proof:` and `inspect_fails:` fields (parse + serialize).
+operations.py: `ready_items()` (bd-ready equivalent), `reopen_item()` (inspector fail path).
+CLI additions: `swarm ready [--json]`, `swarm role list/enable/disable/show`,
+`swarm inspect <id> --pass|--fail --reason`, `swarm partial --proof`, `swarm done --force`.
+mkdocs.yml fixed: site_url/repo_url updated from SwarmCity → dot_swarm.
+Tests: 195 still passing (no new test files yet — SWC-019 still needs test coverage).
+Next: write tests for roles.py + new CLI commands, then implement SWC-020 (watchdog escalation log).
 
 **Phase 1 implementation complete (2026-04-06)**:
 New files created:
