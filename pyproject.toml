@@ -26,10 +26,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/MikeHLee/dot_swarm"
+Homepage = "https://github.com/oasis-main/dot_swarm"
 Documentation = "https://mikehlee.github.io/dot_swarm/"
-Repository = "https://github.com/MikeHLee/dot_swarm.git"
-Issues = "https://github.com/MikeHLee/dot_swarm/issues"
+Repository = "https://github.com/oasis-main/dot_swarm.git"
+Issues = "https://github.com/oasis-main/dot_swarm/issues"
 
 [project.optional-dependencies]
 ai = [
