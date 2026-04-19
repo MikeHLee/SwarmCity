@@ -83,6 +83,19 @@ swarm report --only active          # active items only
 swarm report --no-done              # skip done sections
 ```
 
+### `swarm ready`
+
+List OPEN items with all dependencies satisfied — safe to pick up right now.
+Equivalent to `bd ready` in the Gastown/Beads ecosystem.
+
+```bash
+swarm ready            # human-readable list
+swarm ready --json     # machine-readable JSON array (for agent scripts)
+```
+
+Only items in the `Pending` section with state `OPEN` whose entire `depends:` chain
+appears in the `Done` section are shown. Items with no dependencies are always listed.
+
 ---
 
 ## Work Item Lifecycle
@@ -115,6 +128,17 @@ Mark a claimed item as done.
 ```bash
 swarm done CLD-042
 swarm done CLD-042 --note "Used converse API instead of invoke-model"
+swarm done CLD-042 --next "Pick up CLD-043 next"   # update state.md focus
+```
+
+!!! warning "Inspector gate"
+    When the **inspector** role is enabled, `swarm done` is blocked unless the item
+    has valid proof attached. Workers must use `swarm partial --proof` first, then
+    an inspector agent runs `swarm inspect --pass`. Use `--force` to bypass as a
+    human director.
+
+```bash
+swarm done CLD-042 --force    # human director override
 ```
 
 ### `swarm partial`
@@ -123,8 +147,21 @@ Checkpoint progress on a claimed item without marking it done. Updates the item'
 in-progress note and refreshes the claim timestamp.
 
 ```bash
-swarm partial CLD-042 "Auth header parsing done, token validation next"
+swarm partial CLD-042 --note "Auth header parsing done, token validation next"
 ```
+
+**With proof (required when inspector role is enabled):**
+
+```bash
+swarm partial CLD-042 --proof "branch:feature/oauth2 commit:abc1234 tests:42/42"
+```
+
+The `--proof` value is a space-separated list of `key:value` pairs. Required fields
+are validated against the inspector role config (`branch` and `commit` by default).
+A warning is printed if required fields are missing — the inspector will reject the
+item unless they are present.
+
+See [Agent Roles → Inspector](ROLES.md#inspector) for the full proof workflow.
 
 ### `swarm block`
 
@@ -509,6 +546,93 @@ swarm session "what should I pick up?" # single non-interactive turn
 For **Claude Code**: CLAUDE.md already loads `.swarm/` context automatically.
 For **gemini / opencode**: writes `.swarm/CURRENT_SESSION.md` context file first.
 
+---
+
+## Agent Roles
+
+Agent roles extend multi-agent task mode with structured behaviors. See
+[Agent Roles](ROLES.md) for the full conceptual guide. All role state is stored in
+`.swarm/roles/<name>.json` — enabling or disabling a role never modifies `queue.md`.
+
+### `swarm role list`
+
+Show all known roles and their current status.
+
+```bash
+swarm role list
+```
+
+### `swarm role enable`
+
+Enable a role (or reconfigure it if already enabled).
+
+```bash
+swarm role enable inspector
+swarm role enable inspector --max-iterations 3 --require-proof "branch,commit,tests"
+swarm role enable inspector --agent inspector-bot-1
+swarm role enable watchdog
+swarm role enable supervisor
+swarm role enable librarian
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--max-iterations N` | `3` | (inspector) Fail count before watchdog escalation |
+| `--require-proof FIELDS` | `branch,commit` | (inspector) Comma-separated required proof fields |
+| `--agent AGENT_ID` | *(any)* | Assign a specific agent ID to this role |
+
+### `swarm role disable`
+
+Remove a role config (idempotent).
+
+```bash
+swarm role disable inspector
+```
+
+### `swarm role show`
+
+Print full configuration for a role.
+
+```bash
+swarm role show inspector
+```
+
+---
+
+## Inspector
+
+The `swarm inspect` command is used by the inspector agent to verify a worker's
+proof-of-work and either pass (mark done) or fail (re-open) a work item.
+
+The inspector role must be enabled first: `swarm role enable inspector`.
+
+### `swarm inspect`
+
+```bash
+swarm inspect CLD-042 --pass
+swarm inspect CLD-042 --pass --note "Tests pass, code reviewed"
+
+swarm inspect CLD-042 --fail --reason "Edge case X not handled — see test_auth.py:142"
+```
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--pass` | one of | Accept proof — mark item done, sign in trail |
+| `--fail` | one of | Reject proof — reopen item, increment `inspect_fails` |
+| `--reason TEXT` | with `--fail` | Explanation written back to the item's notes |
+| `--agent TEXT` | no | Inspector agent ID override |
+
+**On `--pass`:** item moves to Done, inspector agent ID is recorded, operation signed
+in `trail.log`.
+
+**On `--fail`:** item moves back to OPEN, `proof:` is cleared, `inspect_fails` is
+incremented. If `inspect_fails >= max_iterations` and watchdog is enabled, an
+escalation alert is printed.
+
+See [Agent Roles → Inspector](ROLES.md#inspector) for the full workflow diagram.
+
+---
+
 ### `swarm configure`
 
 Interactive wizard to set your default LLM interface and (if Bedrock) model + region.
@@ -558,7 +682,7 @@ See [Drift Check Setup](DRIFT_CHECK_SETUP.md) for AWS Bedrock prerequisites.
 | oasis-welcome | `WEB` |
 | oasis-cloud-wiki | `WIKI` |
 | oasis-records | `REC` |
-| swarm-city | `SWC` |
+| dot_swarm | `SWC` |
 
 IDs are assigned sequentially and never reused.
 

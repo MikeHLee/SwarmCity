@@ -22,6 +22,8 @@ theme:
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
+  icon:
+    repo: fontawesome/brands/github
   features:
     - navigation.sections
     - navigation.expand
@@ -38,6 +40,7 @@ nav:
       - Drift Check: DRIFT_CHECK_SETUP.md
   - Reference:
       - CLI Reference: CLI_REFERENCE.md
+      - Agent Roles: ROLES.md
       - Architecture & Internals: ARCHITECTURE.md
       - Integration Plan: INTEGRATION_PLAN.md
   - swarms.ai Integration:
