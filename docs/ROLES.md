@@ -19,9 +19,16 @@ swarm role show inspector              # full config
 | Role | Purpose | Key command |
 |------|---------|-------------|
 | **inspector** | Requires proof-of-work before an item can be marked done | `swarm inspect` |
-| **watchdog** | Escalates stuck items to humans after inspector loops fail | automatic |
-| **supervisor** | Holistic progress view across all active items and phases | `swarm supervisor` *(roadmap)* |
-| **librarian** | Catalogs directory contents into `.swarm/` context and queue | `swarm librarian` *(roadmap)* |
+| **supervisor** | Holistic progress view across all active items and phases | `swarm spawn --role supervisor` |
+
+!!! note "Watchdog and Librarian are now built-in"
+    The **watchdog** escalation pattern is now intrinsic to the inspector retry loop —
+    items auto-BLOCK when retries are exhausted, surfacing in `swarm audit` and
+    `swarm status` without a separate role agent. Use `swarm spawn --role watchdog`
+    to open a dedicated monitoring window if you want a live operator.
+
+    The **librarian** catalog function is now `swarm crawl`. Run it alongside
+    `swarm heal` for a full context + alignment pass — no separate role required.
 
 ---
 
@@ -118,82 +125,110 @@ The `proof:` and `inspect_fails:` fields are stored inline in `queue.md`, just l
 
 ---
 
-## Watchdog
+## Watchdog (built-in)
 
-The watchdog monitors for items that are stuck in an inspector loop or need domain
-context that neither the worker nor inspector can resolve after multiple iterations.
+Watchdog escalation is now intrinsic to the inspector retry loop — **no separate role
+agent is required**. When an item's `inspect_fails` reaches its effective retry limit,
+it is automatically set to `BLOCKED` with a clear reason. Blocked items surface
+immediately in `swarm audit`, `swarm status`, and `swarm heal`.
 
-When enabled alongside inspector, it automatically fires when `inspect_fails >=
-max_iterations` on any item. It surfaces a human-readable escalation alert in the CLI
-and (roadmap) can write to `.swarm/escalations.md` for async review.
+**Retry limit precedence:**
+
+1. **Task level** — `max_retries:` field on the queue item (set via `swarm add --max-retries N`)
+2. **Role level** — `max_iterations` in `.swarm/roles/inspector.json` (set via `swarm role enable inspector --max-iterations N`)
+3. **Default** — 3
 
 ```bash
-swarm role enable watchdog
+# Task-level override (this item gets 5 tries, not the role default)
+swarm add "Implement OAuth2" --max-retries 5
+
+# Role-level default
+swarm role enable inspector --max-iterations 3
 ```
 
-**Roadmap additions:**
-- `.swarm/escalations.md` — append-only log of all escalated items
-- `swarm watchdog report` — list all currently escalated items
-- Optional webhook (Slack / GitHub Issues) on escalation
+When exhausted:
+```
+Max retries exhausted: [SWC-042] is now BLOCKED (3/3 fails).
+  Use 'swarm unblock --reclaim' to manually reassign, or 'swarm done --force' to override.
+```
+
+To run a **live watchdog monitoring window** (optional):
+```bash
+swarm spawn --role watchdog    # opens a tmux window running swarm audit --full in a loop
+```
 
 ---
 
 ## Supervisor
 
-The supervisor maintains a holistic view across all active items, in-flight phases,
-and agent assignments. It provides structured progress briefs for a human director
-without that person needing to read every queue.md manually.
+The supervisor provides a holistic view across all active items and phases. Launch
+one as a named tmux window using `swarm spawn`:
 
 ```bash
-swarm role enable supervisor
+swarm spawn --role supervisor    # opens tmux window with SWARM_ROLE=supervisor set
 ```
 
-**Roadmap additions:**
-- `swarm supervisor report` — aggregate active items + phase progress across all levels
-- `swarm supervisor brief --format md` — concise markdown summary for a human director
-- Integrates with `swarm ascend / descend` to roll up across the org hierarchy
+Inside the supervisor window the agent has access to all `swarm` commands. Useful
+starting points:
+
+```bash
+swarm explore --depth 3    # colony heartbeat across all divisions
+swarm report --only active # active items only, all divisions
+swarm audit --full         # full health pass
+```
+
+**Roadmap:**
+- `swarm supervisor brief --format md` — structured progress brief for a human director
+- Hierarchy roll-up via `swarm ascend / descend`
 
 ---
 
-## Librarian
+## Librarian (built-in via `swarm crawl`)
 
-The librarian crawls the directory tree of a division and populates `.swarm/` with
-any undocumented modules or files — creating `OPEN` queue items for undocumented
-components and flagging conflicts to the watchdog.
+Directory cataloging is now a first-class command rather than a role agent:
 
 ```bash
-swarm role enable librarian
+swarm crawl                   # catalog directory tree → context.md
+swarm crawl --create-items    # also create queue items for undocumented dirs
+swarm heal                    # verify alignment after crawl
 ```
 
-**Roadmap additions:**
-- `swarm librarian catalog` — walk the tree, append to `context.md`, create queue items
-  for undocumented files
-- `swarm librarian diff` — list files not referenced in any queue item
-- Conflicts (file exists but contradicts existing queue item) raised to watchdog if enabled
+See [CLI Reference → swarm crawl](CLI_REFERENCE.md#swarm-crawl) for full options.
+
+To run a **live librarian window** that monitors a directory for new uncatalogued
+content:
+```bash
+swarm spawn --role watchdog    # reuse watchdog window for periodic crawl + heal
+```
 
 ---
 
 ## Role Interaction Map
 
 ```
-Worker agent
+Worker agent  (swarm spawn SWC-042 --agent opencode)
     │
     ├── swarm claim <id>
     ├── ... do work ...
     └── swarm partial <id> --proof "branch:X commit:Y tests:N/N"
                 │
                 ▼
-        Inspector agent
+        Inspector agent  (swarm spawn --role inspector)
             │
-            ├── swarm inspect <id> --pass  ──► DONE (signed in trail.log)
+            ├── swarm inspect <id> --pass
+            │       └──► DONE  (signed in trail.log)
             │
-            └── swarm inspect <id> --fail  ──► re-OPEN (inspect_fails++)
-                        │
-                        │  (if inspect_fails >= max_iterations)
-                        ▼
-                Watchdog alert ──► human review
-                        │
-                        └── swarm done <id> --force  (human director override)
+            └── swarm inspect <id> --fail --reason "..."
+                        └──► re-OPEN  (inspect_fails++)
+                                │
+                                │  (if inspect_fails >= effective max_retries)
+                                ▼
+                        BLOCKED  ←── automatic, no external agent needed
+                        (surfaces in swarm audit / swarm status)
+                                │
+                                ▼
+                    human: swarm unblock --reclaim
+                        or: swarm done --force
 ```
 
 ---
@@ -202,11 +237,12 @@ Worker agent
 
 | dot_swarm | Gastown | Notes |
 |-----------|---------|-------|
-| inspector | Witness (partial) | dot_swarm inspector actively gates done; Witness monitors health |
-| watchdog | — | No direct equivalent in Gastown |
-| supervisor | Mayor (partial) | Mayor orchestrates work; supervisor observes and reports |
-| librarian | — | No direct equivalent in Gastown |
-| *(worker)* | Polecats | Ephemeral workers; in dot_swarm any agent with `$SWARM_AGENT_ID` |
+| inspector | Witness (partial) | dot_swarm inspector actively gates done; Witness only monitors health |
+| *(auto-block on retries)* | — | Watchdog escalation is intrinsic; no separate role agent |
+| supervisor | Mayor (partial) | Mayor orchestrates; supervisor observes and reports |
+| `swarm crawl` | — | Librarian function is a built-in command, not a role |
+| `swarm spawn` | Colony bootstrap | Gastown has fixed colony setup; dot_swarm spawns on demand |
+| *(worker)* | Polecats | Ephemeral workers; any agent with `$SWARM_AGENT_ID` |
 | *(merge gate)* | Refinery | SWC-024 roadmap item |
 
 dot_swarm roles are **advisory and toggleable** — you enable only what your workflow

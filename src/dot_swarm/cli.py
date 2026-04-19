@@ -12,10 +12,10 @@ import click
 
 from .models import ItemState, Priority, SwarmPaths
 from .operations import (
-    add_item, append_memory, audit, block_item, claim_item, done_item,
-    next_item_id, partial_item, ready_items, reopen_item, read_queue,
-    read_state, write_state, _division_code_from_paths, discover_divisions,
-    find_parent_paths, get_alignment, get_colony_summary,
+    add_item, append_memory, audit, block_item, claim_item, crawl_directory,
+    done_item, next_item_id, partial_item, ready_items, reopen_item,
+    read_queue, read_state, write_queue, write_state, _division_code_from_paths,
+    discover_divisions, find_parent_paths, get_alignment, get_colony_summary,
 )
 
 
@@ -1792,25 +1792,23 @@ def inspect(ctx: click.Context, item_id: str, verdict: str | None,
         if not reason:
             click.echo("--reason is required with --fail.", err=True)
             sys.exit(1)
-        item = reopen_item(paths, item_id, inspector_id, reason)
+        item, exhausted = reopen_item(paths, item_id, inspector_id, reason,
+                                      role_max_iterations=role.max_iterations)
         record = _sign.sign_operation(paths.root, "inspect_fail", inspector_id,
                                       {"item_id": item_id, "reason": reason})
         _sign.append_trail(paths.root, record)
-        click.echo(f"Rejected: [{item_id}] re-opened. Fail #{item.inspect_fails}.")
-        click.echo(f"  Reason: {reason}")
 
-        if _roles.check_escalation(item.inspect_fails, role.max_iterations):
-            if _roles.is_role_enabled(paths, "watchdog"):
-                click.echo(
-                    f"\n  Watchdog alert: {item_id} has failed inspection "
-                    f"{item.inspect_fails}/{role.max_iterations} times. "
-                    "Human review required."
-                )
-            else:
-                click.echo(
-                    f"\n  Max iterations reached ({item.inspect_fails}/{role.max_iterations}). "
-                    "Enable the watchdog role or resolve manually: swarm role enable watchdog"
-                )
+        effective_max = item.max_retries if item.max_retries > 0 else role.max_iterations
+        if exhausted:
+            click.echo(
+                f"Max retries exhausted: [{item_id}] is now BLOCKED "
+                f"({item.inspect_fails}/{effective_max} fails)."
+            )
+            click.echo(f"  Reason: {reason}")
+            click.echo("  Use 'swarm unblock --reclaim' to manually reassign, or 'swarm done --force' to override.")
+        else:
+            click.echo(f"Rejected: [{item_id}] re-opened. Fail #{item.inspect_fails}/{effective_max}.")
+            click.echo(f"  Reason: {reason}")
 
 
 # ---------------------------------------------------------------------------
@@ -1914,6 +1912,198 @@ def role_show(ctx: click.Context, role_name: str) -> None:
     click.echo(f"  assigned_agent:       {cfg.assigned_agent or '(any)'}")
     if cfg.extra:
         click.echo(f"  extra:                {_json.dumps(cfg.extra)}")
+
+
+# ---------------------------------------------------------------------------
+# swarm spawn  (tmux + agent CLI worker/role launcher)
+# ---------------------------------------------------------------------------
+
+_AGENT_CMDS = {
+    "opencode": "opencode",
+    "claude":   "claude",
+    "ollama":   "ollama run llama3",
+    "bedrock":  "swarm ai --chain",
+}
+
+_ROLE_PROMPTS = {
+    "inspector":  "You are an inspector agent. Use 'swarm inspect' to verify worker proof.",
+    "supervisor": "You are a supervisor agent. Use 'swarm report' and 'swarm explore'.",
+    "watchdog":   "You are a watchdog agent. Monitor blocked items with 'swarm audit --full'.",
+}
+
+
+@cli.command()
+@click.argument("item_id", required=False)
+@click.option("--agent", "agent_name",
+              type=click.Choice(["opencode", "claude", "ollama", "bedrock"]),
+              default="opencode", show_default=True,
+              help="Agent CLI to launch in the tmux window")
+@click.option("--role", default=None,
+              type=click.Choice(["inspector", "supervisor", "watchdog"]),
+              help="Spawn as a role agent rather than a worker")
+@click.option("--session", default="swarm", show_default=True,
+              help="tmux session name (created if absent)")
+@click.option("--window-name", default=None,
+              help="tmux window name (default: item_id or role name)")
+@click.option("--no-claim", is_flag=True, default=False,
+              help="Do not auto-claim the item — just open the window")
+@click.option("--agent-id", default=None,
+              help="Override SWARM_AGENT_ID (default: spawn-<role|item>-<ts>)")
+@click.pass_context
+def spawn(ctx: click.Context, item_id: str | None, agent_name: str, role: str | None,
+          session: str, window_name: str | None, no_claim: bool,
+          agent_id: str | None) -> None:
+    """Launch an agent in a named tmux window for a work item or role.
+
+    Requires tmux 3.0+ and the chosen agent CLI (opencode, claude, etc.)
+    to be on PATH. Creates the tmux session if it doesn't exist.
+
+    Worker examples:
+      swarm spawn SWC-042                          # opencode worker, auto-claims
+      swarm spawn SWC-042 --agent claude           # Claude Code worker
+      swarm spawn SWC-042 --agent ollama           # local Ollama worker
+      swarm spawn SWC-042 --no-claim               # open window without claiming
+
+    Role examples:
+      swarm spawn --role inspector                  # inspector monitor window
+      swarm spawn --role supervisor                 # supervisor overview window
+      swarm spawn --role watchdog                   # watchdog audit loop
+    """
+    import shutil
+    import subprocess
+
+    paths = _get_paths(ctx.obj["path"])
+
+    # --- Dependency checks ---
+    if not shutil.which("tmux"):
+        click.echo("Error: tmux not found. Install tmux 3.0+: brew install tmux", err=True)
+        sys.exit(1)
+
+    agent_cmd = _AGENT_CMDS[agent_name]
+    agent_bin = agent_cmd.split()[0]
+    if not shutil.which(agent_bin):
+        click.echo(f"Error: '{agent_bin}' not found on PATH. Install it first.", err=True)
+        sys.exit(1)
+
+    ts = datetime.utcnow().strftime("%H%M%S")
+    target_name = role if role else item_id
+
+    if not item_id and not role:
+        click.echo("Error: provide an ITEM_ID or --role.", err=True)
+        sys.exit(1)
+
+    effective_agent_id = agent_id or f"spawn-{target_name}-{ts}"
+    win_name = window_name or target_name
+
+    # --- Auto-claim item ---
+    if item_id and not no_claim and not role:
+        try:
+            claim_item(paths, item_id, effective_agent_id)
+            click.echo(f"Claimed [{item_id}] as {effective_agent_id}")
+        except ValueError as e:
+            click.echo(f"Warning: could not auto-claim: {e}", err=True)
+
+    # --- Build env + prompt context ---
+    swarm_root = str(paths.root.parent)
+    env_prefix = (
+        f"SWARM_AGENT_ID={effective_agent_id} "
+        f"SWARM_ITEM_ID={item_id or ''} "
+        f"SWARM_ROLE={role or 'worker'} "
+    )
+
+    role_hint = ""
+    if role and role in _ROLE_PROMPTS:
+        role_hint = f" # {_ROLE_PROMPTS[role]}"
+
+    cmd = f"cd {swarm_root!r} && {env_prefix}{agent_cmd}{role_hint}"
+
+    # --- Ensure tmux session exists ---
+    check = subprocess.run(
+        ["tmux", "has-session", "-t", session],
+        capture_output=True,
+    )
+    if check.returncode != 0:
+        subprocess.run(["tmux", "new-session", "-d", "-s", session], check=True)
+        click.echo(f"Created tmux session: {session}")
+
+    # --- Open window ---
+    subprocess.run(
+        ["tmux", "new-window", "-t", session, "-n", win_name, cmd],
+        check=True,
+    )
+    click.echo(f"Spawned [{win_name}] in tmux session '{session}' ({agent_name})")
+    click.echo(f"  Attach: tmux attach -t {session}")
+    click.echo(f"  Switch: tmux select-window -t {session}:{win_name}")
+
+
+# ---------------------------------------------------------------------------
+# swarm crawl  (directory cataloging → context.md + optional queue items)
+# ---------------------------------------------------------------------------
+
+@cli.command()
+@click.option("--depth", default=3, show_default=True,
+              help="Max directory depth to walk")
+@click.option("--create-items", is_flag=True, default=False,
+              help="Create OPEN queue items for uncatalogued directories")
+@click.option("--dry-run", is_flag=True, default=False,
+              help="Print what would be cataloged without writing anything")
+@click.pass_context
+def crawl(ctx: click.Context, depth: int, create_items: bool, dry_run: bool) -> None:
+    """Crawl the current directory tree to build context.
+
+    Walks subdirectories up to --depth levels. Stops descending into any
+    subdirectory that already has a .swarm/ directory — those are tracked
+    as separate swarm divisions.
+
+    Results are written to .swarm/context.md under a '## Directory Map'
+    section. Use --create-items to also add OPEN queue items for each
+    uncatalogued directory, ready for documentation or review.
+
+    Combined with 'swarm heal', this replaces the need for a separate
+    librarian role agent.
+
+    Examples:
+      swarm crawl                  # catalog to context.md
+      swarm crawl --depth 5        # go deeper
+      swarm crawl --create-items   # also add queue items
+      swarm crawl --dry-run        # preview without writing
+    """
+    paths = _get_paths(ctx.obj["path"])
+    root = paths.root.parent
+
+    findings = crawl_directory(paths, root, depth=depth,
+                                create_items=create_items, dry_run=dry_run)
+
+    uncatalogued = [f for f in findings if f["type"] == "uncatalogued"]
+    divisions    = [f for f in findings if f["type"] == "swarm_division"]
+
+    if dry_run:
+        click.echo(f"Crawl preview (dry run) — root: {root}")
+    else:
+        click.echo(f"Crawled {root}")
+
+    if divisions:
+        click.echo(f"\n  Swarm divisions found ({len(divisions)}) — skipped:")
+        for d in divisions:
+            click.echo(f"    {d['path']}/")
+
+    if uncatalogued:
+        label = "Would catalog" if dry_run else "Catalogued"
+        click.echo(f"\n  {label} ({len(uncatalogued)} dirs):")
+        for d in uncatalogued:
+            summary = f"{d['file_count']} files"
+            if d.get("ext_summary"):
+                summary += f" ({d['ext_summary']})"
+            click.echo(f"    {d['path']}/ — {summary}")
+        if not dry_run:
+            click.echo(f"\n  Written to: {paths.context}")
+            if create_items:
+                click.echo(f"  Created {len(uncatalogued)} OPEN queue items (project: librarian)")
+    else:
+        click.echo("  No uncatalogued directories found.")
+
+    if not dry_run and uncatalogued:
+        click.echo("\nRun 'swarm heal' to verify context alignment after cataloging.")
 
 
 # ---------------------------------------------------------------------------

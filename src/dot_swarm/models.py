@@ -48,6 +48,7 @@ class WorkItem:
     depends: list[str] = field(default_factory=list)
     proof: str = ""              # worker-supplied evidence for Inspector verification
     inspect_fails: int = 0      # times Inspector has rejected this item
+    max_retries: int = 0        # 0 = use role default; >0 overrides at task level
 
     # Regex patterns for parsing queue.md lines
     # Matches: - [>] [ORG-002] [CLAIMED · claude-code · 2026-03-26T14:30Z] description
@@ -67,7 +68,7 @@ class WorkItem:
     BLOCKED_STAMP_RE = re.compile(r"BLOCKED · (?P<reason>.+)")
 
     FIELD_RE = re.compile(
-        r"^\s+(?P<key>priority|project|notes|depends|refs|proof|inspect_fails): (?P<value>.+)$"
+        r"^\s+(?P<key>priority|project|notes|depends|refs|proof|inspect_fails|max_retries): (?P<value>.+)$"
     )
 
     @classmethod
@@ -115,6 +116,8 @@ class WorkItem:
             fields.append(f"proof: {self.proof}")
         if self.inspect_fails:
             fields.append(f"inspect_fails: {self.inspect_fails}")
+        if self.max_retries:
+            fields.append(f"max_retries: {self.max_retries}")
         if fields:
             line += "\n      " + "\n      ".join(fields)
         return line

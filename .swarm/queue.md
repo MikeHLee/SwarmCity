@@ -156,12 +156,12 @@ Item IDs: `SWC-<3-digit-number>` — assigned sequentially, never reused.
              reopen_item() in operations.py: clears proof, increments inspect_fails, moves to OPEN.
              Escalates to watchdog after max_iterations (default 3) if watchdog role is enabled.
 
-- [ ] [SWC-020] [OPEN] Watchdog role — escalate stuck items to human when worker+inspector loop
+- [x] [SWC-020] [DONE · 2026-04-19T00:00Z] Watchdog role — escalate stuck items to human when worker+inspector loop
       project: cli-roles
       priority: medium
-      notes: Escalation already triggered in swarm inspect --fail when inspect_fails >= max_iterations
-             and watchdog role is enabled. Needs: swarm watchdog report (list all escalated items),
-             dedicated escalation log (.swarm/escalations.md), optional Slack/GitHub Issues webhook.
+      notes: Subsumed into inspector retry loop. reopen_item() now auto-BLOCKs when inspect_fails
+             >= effective max_retries (task-level overrides role-level). Blocked items surface in
+             swarm audit/status naturally. swarm spawn --role watchdog opens a live monitor window.
 
 - [ ] [SWC-021] [OPEN] Supervisor role — holistic progress view + human-director briefs
       project: cli-roles
@@ -170,19 +170,30 @@ Item IDs: `SWC-<3-digit-number>` — assigned sequentially, never reused.
              swarm supervisor brief --format md (structured summary for human director).
              Should aggregate across ascend/descend hierarchy too.
 
-- [ ] [SWC-022] [OPEN] Librarian role — catalog directory tree into .swarm/ context + queue
+- [x] [SWC-022] [DONE · 2026-04-19T00:00Z] Librarian role — catalog directory tree into .swarm/ context + queue
       project: cli-roles
       priority: medium
-      notes: swarm librarian catalog (walk dir tree, append undocumented modules to context.md,
-             create OPEN queue items for undocumented files). swarm librarian diff (files not
-             referenced in any queue item). Conflicts raised to watchdog if role enabled.
+      notes: Subsumed into swarm crawl command. crawl_directory() in operations.py walks tree,
+             skips existing .swarm/ divisions, appends Directory Map to context.md.
+             swarm crawl --create-items generates OPEN queue items for uncatalogued dirs.
+             Combined with swarm heal this replaces the librarian role entirely.
 
-- [ ] [SWC-023] [OPEN] tmux worker spawning — swarm spawn <id> [--agent opencode|claude|ollama]
+- [x] [SWC-023] [DONE · 2026-04-19T00:00Z] tmux worker spawning — swarm spawn <id> [--agent opencode|claude|ollama]
       project: cli-roles
       priority: high
-      notes: Opens named tmux window, boots agent with SWARM_AGENT_ID set, claims item automatically.
-             swarm spawn SWC-042 --agent opencode → tmux new-window -n SWC-042 "opencode ...".
-             Needed to make the inspector/worker loop fully automated end-to-end.
+      notes: Implemented. swarm spawn SWC-042 --agent opencode|claude|ollama|bedrock.
+             Auto-creates tmux session, opens named window, sets SWARM_AGENT_ID/SWARM_ITEM_ID/SWARM_ROLE.
+             Auto-claims item unless --no-claim. Role agents: swarm spawn --role inspector|supervisor|watchdog.
+             Dependency checks: tmux 3.0+ and chosen agent CLI on PATH.
+
+- [x] [SWC-025] [DONE · 2026-04-19T00:00Z] Task-level max_retries + swarm crawl command
+      project: cli-roles
+      priority: high
+      notes: WorkItem.max_retries field (0=use role default, >0=task override).
+             swarm add --max-retries N sets per-task inspector retry limit.
+             reopen_item() uses effective_max = max(task, role) with block-on-exhaust.
+             swarm crawl: crawl_directory() in operations.py, --depth/--create-items/--dry-run.
+             Watchdog and Librarian roles subsumed; simpler architecture overall.
 
 - [ ] [SWC-024] [OPEN] Merge queue (lightweight Refinery) — serialize concurrent branch merges
       project: cli-roles

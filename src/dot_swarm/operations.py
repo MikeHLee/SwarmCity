@@ -27,7 +27,7 @@ from .models import (
 # ---------------------------------------------------------------------------
 
 SECTION_RE = re.compile(r"^## (Active|Pending|Done)$", re.MULTILINE)
-FIELD_RE = re.compile(r"^\s{6}(?P<key>priority|project|notes|depends|refs|proof|inspect_fails): (?P<value>.+)$")
+FIELD_RE = re.compile(r"^\s{6}(?P<key>priority|project|notes|depends|refs|proof|inspect_fails|max_retries): (?P<value>.+)$")
 
 
 def read_queue(paths: SwarmPaths) -> tuple[list[WorkItem], list[WorkItem], list[WorkItem]]:
@@ -96,6 +96,11 @@ def _parse_items(section_text: str) -> list[WorkItem]:
             elif key == "inspect_fails":
                 try:
                     current_item.inspect_fails = int(value)
+                except ValueError:
+                    pass
+            elif key == "max_retries":
+                try:
+                    current_item.max_retries = int(value)
                 except ValueError:
                     pass
     return items
@@ -282,8 +287,13 @@ def reopen_item(
     item_id: str,
     inspector_id: str,
     reason: str,
-) -> WorkItem:
-    """Re-open an item after Inspector rejection. Clears proof, increments inspect_fails."""
+    role_max_iterations: int = 3,
+) -> tuple["WorkItem", bool]:
+    """Re-open an item after Inspector rejection.
+
+    Returns (item, exhausted) where exhausted=True means retry limit was hit
+    and the item has been BLOCKED rather than re-opened.
+    """
     active, pending, done = read_queue(paths)
     target = _find_item(active + pending, item_id)
     if target is None:
@@ -291,19 +301,141 @@ def reopen_item(
 
     target.inspect_fails += 1
     target.proof = ""
-    target.state = ItemState.OPEN
-    target.claimed_by = None
-    target.claimed_at = None
     fail_note = f"inspector-fail-{target.inspect_fails}: {reason} (by {inspector_id})"
     target.notes = (target.notes + " | " + fail_note).strip(" | ") if target.notes else fail_note
 
-    # Move back to pending
+    # Effective limit: task-level overrides role-level when set
+    effective_max = target.max_retries if target.max_retries > 0 else role_max_iterations
+    exhausted = target.inspect_fails >= effective_max
+
+    if exhausted:
+        # Block rather than re-open — surfaces in swarm audit/status automatically
+        target.state = ItemState.BLOCKED
+        block_reason = (
+            f"Max retries exhausted ({target.inspect_fails}/{effective_max}). "
+            "Human review required. Use 'swarm unblock --reclaim' to reassign."
+        )
+        target.notes = (target.notes + " | " + block_reason).strip(" | ")
+    else:
+        target.state = ItemState.OPEN
+        target.claimed_by = None
+        target.claimed_at = None
+
+    # Move back to pending (BLOCKED items stay in pending, surfaced by audit)
     active = [i for i in active if i.id != item_id]
     if target not in pending:
         pending.append(target)
 
     write_queue(paths, active, pending, done)
-    return target
+    return target, exhausted
+
+
+def crawl_directory(
+    paths: SwarmPaths,
+    root: Path,
+    depth: int = 3,
+    create_items: bool = False,
+    dry_run: bool = False,
+) -> list[dict]:
+    """Walk *root*, skip subdirs that already have .swarm/, catalog the rest.
+
+    Appends a '## Directory Map' section to context.md and optionally creates
+    OPEN queue items for uncatalogued directories.
+
+    Returns a list of dicts describing what was found/created.
+    """
+    import fnmatch
+
+    IGNORE_PATTERNS = {".git", "__pycache__", "node_modules", ".venv", "venv",
+                       "dist", "build", ".tox", ".eggs", "*.egg-info"}
+
+    def _should_ignore(name: str) -> bool:
+        return any(fnmatch.fnmatch(name, p) for p in IGNORE_PATTERNS)
+
+    findings: list[dict] = []
+
+    def _walk(directory: Path, current_depth: int) -> None:
+        if current_depth > depth:
+            return
+        try:
+            entries = sorted(directory.iterdir())
+        except PermissionError:
+            return
+
+        for entry in entries:
+            if not entry.is_dir() or _should_ignore(entry.name):
+                continue
+            if (entry / ".swarm").is_dir():
+                findings.append({
+                    "path": str(entry.relative_to(root)),
+                    "type": "swarm_division",
+                    "note": "already has .swarm/ — skipped",
+                })
+                continue  # don't descend into existing swarm divisions
+
+            # Catalog this directory
+            try:
+                files = [f.name for f in entry.iterdir() if f.is_file()]
+            except PermissionError:
+                files = []
+            ext_counts: dict[str, int] = {}
+            for f in files:
+                ext = Path(f).suffix.lower() or "(no ext)"
+                ext_counts[ext] = ext_counts.get(ext, 0) + 1
+            ext_summary = ", ".join(f"{v}×{k}" for k, v in sorted(ext_counts.items(), key=lambda x: -x[1])[:5])
+
+            findings.append({
+                "path": str(entry.relative_to(root)),
+                "type": "uncatalogued",
+                "file_count": len(files),
+                "ext_summary": ext_summary,
+            })
+            _walk(entry, current_depth + 1)
+
+    _walk(root, 1)
+
+    if dry_run:
+        return findings
+
+    # Append Directory Map to context.md
+    uncatalogued = [f for f in findings if f["type"] == "uncatalogued"]
+    divisions = [f for f in findings if f["type"] == "swarm_division"]
+
+    if uncatalogued or divisions:
+        map_lines = [
+            "",
+            "## Directory Map",
+            f"*Last crawled: {datetime.utcnow().strftime('%Y-%m-%dT%H:%MZ')}*",
+            "",
+        ]
+        if divisions:
+            map_lines.append("**Swarm divisions (skipped):**")
+            for d in divisions:
+                map_lines.append(f"- `{d['path']}/` — {d['note']}")
+            map_lines.append("")
+        if uncatalogued:
+            map_lines.append("**Uncatalogued directories:**")
+            for d in uncatalogued:
+                summary = f"{d['file_count']} files" + (f" ({d['ext_summary']})" if d["ext_summary"] else "")
+                map_lines.append(f"- `{d['path']}/` — {summary}")
+
+        ctx_text = paths.context.read_text(encoding="utf-8") if paths.context.exists() else ""
+        # Replace existing Directory Map section if present
+        if "## Directory Map" in ctx_text:
+            ctx_text = ctx_text[:ctx_text.index("## Directory Map")].rstrip()
+        ctx_text += "\n" + "\n".join(map_lines) + "\n"
+        _atomic_write(paths.context, ctx_text)
+
+    # Optionally create OPEN queue items for each uncatalogued directory
+    if create_items:
+        division_code = _division_code_from_paths(paths)
+        for d in uncatalogued:
+            description = f"Document/review directory: {d['path']}/"
+            add_item(paths, description, division_code=division_code,
+                     priority=Priority.LOW, project="librarian",
+                     notes=f"Crawled: {d['file_count']} files {d['ext_summary']}")
+
+    return findings
 
 
 # ---------------------------------------------------------------------------

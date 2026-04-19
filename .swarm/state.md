@@ -1,14 +1,22 @@
 # State — dot_swarm
 
-**Last touched**: 2026-04-18T00:00Z by human-ML
-**Current focus**: Agent roles + multi-agent tooling (SWC-017 through SWC-024)
-**Active items**: (none — SWC-017/018/019 implemented this session, awaiting queue stamp update)
+**Last touched**: 2026-04-19T00:00Z by human-ML
+**Current focus**: Multi-agent tooling complete — spawn, crawl, retry logic, docs
+**Active items**: (none)
 **Blockers**: PyPI Trusted Publishing not yet configured (manual step for SWC-003)
-**Ready for pickup**: SWC-020 (watchdog), SWC-021 (supervisor), SWC-022 (librarian), SWC-023 (tmux spawn), SWC-007, SWC-008, SWC-009
+**Ready for pickup**: SWC-021 (supervisor brief), SWC-024 (merge queue), SWC-007, SWC-008, SWC-009
 
 ---
 
 ## Handoff Note
+
+**Spawn, crawl, retry logic complete (2026-04-19)**:
+swarm spawn: tmux worker/role launcher with auto-claim, SWARM_AGENT_ID/ROLE env, opencode|claude|ollama|bedrock.
+swarm crawl: crawl_directory() walks tree, skips .swarm/ divisions, writes Directory Map to context.md.
+WorkItem.max_retries: task-level inspector retry override; block-on-exhaust replaces watchdog role.
+Watchdog subsumed into reopen_item() auto-BLOCK; Librarian subsumed into swarm crawl.
+Docs updated: ROLES.md, CLI_REFERENCE.md (spawn, crawl, max_retries, updated interaction map).
+SWC-020 (watchdog), SWC-022 (librarian), SWC-023 (spawn), SWC-025 (crawl+retries) all DONE.
 
 **Agent roles + multi-agent tooling implemented (2026-04-18)**:
 New files: `src/dot_swarm/roles.py` — RoleConfig, enable/disable/load/list_roles,

@@ -110,7 +110,21 @@ swarm add "Fix Redis timeout" --priority high --project infra
 swarm add "OAuth2 discovery" --notes "See RFC 8414 for discovery spec"
 ```
 
-Options: `--priority [low|medium|high|critical]`, `--project TEXT`, `--notes TEXT`
+```bash
+swarm add "Add request ID tracing to all services"
+swarm add "Fix Redis timeout" --priority high --project infra
+swarm add "OAuth2 discovery" --notes "See RFC 8414 for discovery spec"
+swarm add "Run integration tests" --depends CLD-042,CLD-043
+swarm add "Implement rate limiter" --max-retries 5  # override inspector retry limit for this task
+```
+
+Options: `--priority [low|medium|high|critical]`, `--project TEXT`, `--notes TEXT`,
+`--depends ITEM-IDs` (comma-separated), `--max-retries N`
+
+**`--max-retries N`** sets a task-level retry override for the inspector role. When
+an inspector rejects this item `N` times, it is automatically BLOCKED (surfacing in
+`swarm audit` and `swarm status`) rather than re-opened. Set to `0` (default) to
+inherit the inspector role's `max_iterations` setting.
 
 ### `swarm claim`
 
@@ -630,6 +644,113 @@ incremented. If `inspect_fails >= max_iterations` and watchdog is enabled, an
 escalation alert is printed.
 
 See [Agent Roles → Inspector](ROLES.md#inspector) for the full workflow diagram.
+
+---
+
+---
+
+## Spawn & Crawl
+
+### `swarm spawn`
+
+Launch an agent CLI in a named tmux window for a specific work item or role.
+Requires **tmux 3.0+** and the chosen agent CLI on PATH.
+
+```bash
+# Worker — claim and open
+swarm spawn SWC-042                          # opencode worker, auto-claims item
+swarm spawn SWC-042 --agent claude           # Claude Code worker
+swarm spawn SWC-042 --agent ollama           # local Ollama worker
+swarm spawn SWC-042 --no-claim               # open window without claiming
+
+# Role agents
+swarm spawn --role inspector                  # inspector monitor window
+swarm spawn --role supervisor                 # supervisor overview window
+swarm spawn --role watchdog                   # watchdog audit loop
+
+# Session control
+swarm spawn SWC-042 --session my-project     # custom tmux session name
+swarm spawn SWC-042 --window-name auth-fix   # custom window name
+swarm spawn SWC-042 --agent-id my-agent-42   # explicit SWARM_AGENT_ID
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--agent` | `opencode` | Agent CLI: `opencode`, `claude`, `ollama`, `bedrock` |
+| `--role` | — | Spawn as a role agent (`inspector`, `supervisor`, `watchdog`) |
+| `--session` | `swarm` | tmux session name (created if absent) |
+| `--window-name` | item_id or role | tmux window name |
+| `--no-claim` | false | Skip auto-claiming the item |
+| `--agent-id` | `spawn-<id>-<ts>` | Override `SWARM_AGENT_ID` env var |
+
+**Environment set in the tmux window:**
+
+| Variable | Value |
+|----------|-------|
+| `SWARM_AGENT_ID` | Effective agent ID |
+| `SWARM_ITEM_ID` | Item being worked on (if any) |
+| `SWARM_ROLE` | `worker`, `inspector`, `supervisor`, or `watchdog` |
+
+**Attach / navigate:**
+```bash
+tmux attach -t swarm                     # attach to session
+tmux select-window -t swarm:SWC-042      # switch to window
+tmux list-windows -t swarm               # list all windows
+```
+
+**Supported agents and install:**
+
+| Agent | Install |
+|-------|---------|
+| `opencode` | `npm install -g opencode-ai` |
+| `claude` | [Claude Code CLI](https://claude.ai/code) |
+| `ollama` | `brew install ollama` |
+| `bedrock` | `pip install 'dot-swarm[ai]'` + `aws configure` |
+
+---
+
+### `swarm crawl`
+
+Walk the current directory tree to build context. Stops descending into any
+subdirectory that already has a `.swarm/` directory (those are separate divisions).
+Results are written to `.swarm/context.md` under a `## Directory Map` section.
+
+Combined with `swarm heal`, this replaces the need for a separate librarian role agent.
+
+```bash
+swarm crawl                  # catalog from cwd, depth 3
+swarm crawl --depth 5        # go deeper
+swarm crawl --create-items   # also create OPEN queue items for each uncatalogued dir
+swarm crawl --dry-run        # preview without writing anything
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--depth N` | `3` | Max directory depth to walk |
+| `--create-items` | false | Create OPEN queue items (project: librarian) for each uncatalogued dir |
+| `--dry-run` | false | Print what would be cataloged, write nothing |
+
+**What gets skipped:**
+`.git/`, `__pycache__/`, `node_modules/`, `.venv/`, `venv/`, `dist/`, `build/`
+
+**Example output:**
+```
+Crawled /Users/me/oasis-cloud
+
+  Swarm divisions found (2) — skipped:
+    services/auth/
+    services/markets/
+
+  Catalogued (4 dirs):
+    docs/ — 12 files (8×.md, 3×.png, 1×.svg)
+    scripts/ — 5 files (5×.sh)
+    config/ — 3 files (2×.toml, 1×.json)
+    tests/fixtures/ — 8 files (8×.json)
+
+  Written to: .swarm/context.md
+
+Run 'swarm heal' to verify context alignment after cataloging.
+```
 
 ---
 
