@@ -1,0 +1,291 @@
+<h1 id="swarmsai-integration--pr-guide-swc-015">swarms.ai Integration — PR Guide (SWC-015)</h1>
+
+<p><strong>Target repo</strong>: <code class="language-plaintext highlighter-rouge">github.com/kyegomez/swarms</code>
+<strong>Proposed location</strong>: <code class="language-plaintext highlighter-rouge">swarms/integrations/dot_swarm/</code>
+<strong>Status</strong>: Ready to open PR</p>
+
+<hr />
+
+<h2 id="what-this-pr-adds">What This PR Adds</h2>
+
+<p>Three standalone classes (no mutual dependency — swarms.ai is optional for all three) that bridge dot_swarm’s git-native stigmergic coordination with swarms.ai’s agent orchestration:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Class</th>
+      <th>Requires <code class="language-plaintext highlighter-rouge">pip install swarms</code>?</th>
+      <th>Purpose</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">DotSwarmStateProvider</code></td>
+      <td>No</td>
+      <td>Injects <code class="language-plaintext highlighter-rouge">.swarm/</code> state into any agent’s system prompt</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">DotSwarmWorkflow</code></td>
+      <td>No (swarms.ai agents optional)</td>
+      <td>Executes <code class="language-plaintext highlighter-rouge">.swarm/workflows/*.md</code> definitions</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">DotSwarmTool</code></td>
+      <td>No</td>
+      <td>Structured tool interface for queue operations</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">StigmergicSwarm</code></td>
+      <td>Yes</td>
+      <td>Novel swarm architecture via indirect stigmergic coordination</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<h2 id="why-it-belongs-in-swarmsai">Why It Belongs in swarms.ai</h2>
+
+<p>swarms.ai currently has <strong>no built-in state persistence between runs</strong>. Each swarm starts cold. dot_swarm fills this gap with a git-native, human-readable state layer that:</p>
+
+<ul>
+  <li>Persists across sessions (<code class="language-plaintext highlighter-rouge">.swarm/queue.md</code>, <code class="language-plaintext highlighter-rouge">state.md</code>, <code class="language-plaintext highlighter-rouge">memory.md</code>)</li>
+  <li>Is fully auditable via git history and <code class="language-plaintext highlighter-rouge">swarm audit</code></li>
+  <li>Can be edited by humans without any tooling</li>
+  <li>Works with any LLM backend (Bedrock, Claude, Gemini, etc.)</li>
+</ul>
+
+<p>The integration is additive — it doesn’t change swarms.ai internals.</p>
+
+<hr />
+
+<h2 id="value-proposition">Value Proposition</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>swarms.ai Gap</th>
+      <th>dot_swarm Solution</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>No state persistence between runs</td>
+      <td><code class="language-plaintext highlighter-rouge">.swarm/</code> markdown files survive restarts</td>
+    </tr>
+    <tr>
+      <td>No audit trail</td>
+      <td><code class="language-plaintext highlighter-rouge">trail.log</code> + git history; <code class="language-plaintext highlighter-rouge">swarm audit --trail</code></td>
+    </tr>
+    <tr>
+      <td>Agents can’t see project context</td>
+      <td><code class="language-plaintext highlighter-rouge">DotSwarmStateProvider.build_system_prompt()</code></td>
+    </tr>
+    <tr>
+      <td>No structured work queue</td>
+      <td><code class="language-plaintext highlighter-rouge">queue.md</code> with priority, claimed-by, depends</td>
+    </tr>
+    <tr>
+      <td>No workflow definitions</td>
+      <td><code class="language-plaintext highlighter-rouge">.swarm/workflows/*.md</code> with <code class="language-plaintext highlighter-rouge">DotSwarmWorkflow</code></td>
+    </tr>
+    <tr>
+      <td>Agents coordinate directly (tight coupling)</td>
+      <td>Stigmergic coordination: agents read/write shared state (loose coupling)</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<h2 id="usage-examples">Usage Examples</h2>
+
+<h3 id="1-give-any-swarmsai-agent-project-context">1. Give any swarms.ai Agent project context</h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="n">swarms</span> <span class="kn">import</span> <span class="n">Agent</span>
+<span class="kn">from</span> <span class="n">dot_swarm.swarms_provider</span> <span class="kn">import</span> <span class="n">DotSwarmStateProvider</span>
+
+<span class="n">provider</span> <span class="o">=</span> <span class="nc">DotSwarmStateProvider</span><span class="p">(</span><span class="n">swarm_path</span><span class="o">=</span><span class="sh">"</span><span class="s">./.swarm</span><span class="sh">"</span><span class="p">)</span>
+
+<span class="n">agent</span> <span class="o">=</span> <span class="nc">Agent</span><span class="p">(</span>
+    <span class="n">agent_name</span><span class="o">=</span><span class="sh">"</span><span class="s">Project-Coordinator</span><span class="sh">"</span><span class="p">,</span>
+    <span class="n">system_prompt</span><span class="o">=</span><span class="n">provider</span><span class="p">.</span><span class="nf">build_system_prompt</span><span class="p">(</span><span class="n">agent_name</span><span class="o">=</span><span class="sh">"</span><span class="s">Project-Coordinator</span><span class="sh">"</span><span class="p">),</span>
+    <span class="n">model_name</span><span class="o">=</span><span class="sh">"</span><span class="s">anthropic/claude-sonnet-4-5</span><span class="sh">"</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">result</span> <span class="o">=</span> <span class="n">agent</span><span class="p">.</span><span class="nf">run</span><span class="p">(</span><span class="sh">"</span><span class="s">What should I work on next?</span><span class="sh">"</span><span class="p">)</span>
+<span class="c1"># Parse response and apply operations (claim/done/add) back to .swarm/
+</span><span class="n">provider</span><span class="p">.</span><span class="nf">apply_operations</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">agent_id</span><span class="o">=</span><span class="sh">"</span><span class="s">project-coordinator</span><span class="sh">"</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h3 id="2-run-a-markdown-workflow-with-swarmsai-agents">2. Run a markdown workflow with swarms.ai agents</h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="n">swarms</span> <span class="kn">import</span> <span class="n">Agent</span>
+<span class="kn">from</span> <span class="n">dot_swarm.swarms_provider</span> <span class="kn">import</span> <span class="n">DotSwarmWorkflow</span>
+
+<span class="c1"># Workflow defined in .swarm/workflows/oauth2.md:
+#   step 1: swarm claim CLD-042  (agent: bedrock)
+#   step 2: swarm claim CLD-043  (agent: claude)
+#   step 3: swarm heal --fix
+</span>
+<span class="n">workflow</span> <span class="o">=</span> <span class="n">DotSwarmWorkflow</span><span class="p">.</span><span class="nf">from_markdown</span><span class="p">(</span><span class="sh">"</span><span class="s">.swarm/workflows/oauth2.md</span><span class="sh">"</span><span class="p">)</span>
+<span class="n">workflow</span><span class="p">.</span><span class="nf">add_agent</span><span class="p">(</span><span class="sh">"</span><span class="s">bedrock</span><span class="sh">"</span><span class="p">,</span> <span class="n">bedrock_agent</span><span class="p">)</span>
+<span class="n">workflow</span><span class="p">.</span><span class="nf">add_agent</span><span class="p">(</span><span class="sh">"</span><span class="s">claude</span><span class="sh">"</span><span class="p">,</span> <span class="n">claude_agent</span><span class="p">)</span>
+
+<span class="n">result</span> <span class="o">=</span> <span class="n">workflow</span><span class="p">.</span><span class="nf">run</span><span class="p">()</span>
+<span class="nf">print</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="sh">"</span><span class="s">summary</span><span class="sh">"</span><span class="p">])</span>   <span class="c1"># "3 ok, 0 failed, 0 skipped"
+</span></code></pre></div></div>
+
+<h3 id="3-give-agents-a-structured-tool-to-interact-with-the-queue">3. Give agents a structured tool to interact with the queue</h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="n">swarms</span> <span class="kn">import</span> <span class="n">Agent</span>
+<span class="kn">from</span> <span class="n">dot_swarm.swarms_provider</span> <span class="kn">import</span> <span class="n">DotSwarmTool</span>
+
+<span class="n">tool</span> <span class="o">=</span> <span class="nc">DotSwarmTool</span><span class="p">(</span><span class="n">swarm_path</span><span class="o">=</span><span class="sh">"</span><span class="s">./.swarm</span><span class="sh">"</span><span class="p">)</span>
+
+<span class="c1"># Register as a callable tool in swarms.ai
+</span><span class="n">agent</span> <span class="o">=</span> <span class="nc">Agent</span><span class="p">(</span>
+    <span class="n">agent_name</span><span class="o">=</span><span class="sh">"</span><span class="s">Queue-Manager</span><span class="sh">"</span><span class="p">,</span>
+    <span class="n">tools</span><span class="o">=</span><span class="p">[</span><span class="n">tool</span><span class="p">],</span>   <span class="c1"># tool.__call__(operation, **kwargs)
+</span>    <span class="bp">...</span>
+<span class="p">)</span>
+
+<span class="c1"># Agents call: tool(operation="claim", item_id="CLD-042", agent_id="agent-1")
+# Agents call: tool(operation="status")
+# Agents call: tool(operation="done", item_id="CLD-042", note="Merged PR #123")
+</span></code></pre></div></div>
+
+<h3 id="4-stigmergicswarm--novel-coordination-pattern">4. StigmergicSwarm — novel coordination pattern</h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="n">swarms</span> <span class="kn">import</span> <span class="n">Agent</span>
+<span class="kn">from</span> <span class="n">dot_swarm.swarms_provider</span> <span class="kn">import</span> <span class="n">StigmergicSwarm</span>
+
+<span class="c1"># Agents coordinate indirectly through .swarm/ files —
+# no direct message passing, no tight coupling.
+</span><span class="n">swarm</span> <span class="o">=</span> <span class="nc">StigmergicSwarm</span><span class="p">(</span>
+    <span class="n">swarm_path</span><span class="o">=</span><span class="sh">"</span><span class="s">./.swarm</span><span class="sh">"</span><span class="p">,</span>
+    <span class="n">agents</span><span class="o">=</span><span class="p">[</span><span class="n">researcher</span><span class="p">,</span> <span class="n">analyst</span><span class="p">,</span> <span class="n">implementer</span><span class="p">],</span>
+    <span class="n">max_rounds</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">results</span> <span class="o">=</span> <span class="n">swarm</span><span class="p">.</span><span class="nf">run</span><span class="p">(</span><span class="sh">"</span><span class="s">Implement OAuth2 integration</span><span class="sh">"</span><span class="p">)</span>
+<span class="c1"># Each agent reads the queue, claims an item, works, marks done.
+# Next agent sees updated state and claims the next item.
+</span></code></pre></div></div>
+
+<hr />
+
+<h2 id="stigmergic-coordination-vs-direct-message-passing">Stigmergic Coordination vs. Direct Message Passing</h2>
+
+<p>swarms.ai agents today coordinate directly — Agent A sends output to Agent B. This creates tight coupling and requires online coordination.</p>
+
+<p>The stigmergic model is different:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Direct (swarms.ai current):
+  Agent A → message → Agent B → message → Agent C
+
+Stigmergic (dot_swarm):
+  Agent A → writes .swarm/queue.md
+                          ↑
+  Agent B reads queue ────┘ → writes done → Agent C reads queue
+</code></pre></div></div>
+
+<p>Benefits:</p>
+<ul>
+  <li><strong>Asynchronous</strong>: Agents don’t need to be online simultaneously</li>
+  <li><strong>Resilient</strong>: If Agent B fails, Agent C can pick up the same item</li>
+  <li><strong>Auditable</strong>: Every state transition is a git-trackable file change</li>
+  <li><strong>Human-in-the-loop</strong>: Humans can inspect and edit <code class="language-plaintext highlighter-rouge">.swarm/</code> files at any time</li>
+</ul>
+
+<p>This mirrors how social insects (ants, termites) coordinate construction without a central coordinator — they leave pheromone traces that other agents read and respond to.</p>
+
+<hr />
+
+<h2 id="proposed-pr-structure">Proposed PR Structure</h2>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarms/integrations/dot_swarm/
+  __init__.py           # exports all four classes
+  provider.py           # DotSwarmStateProvider
+  workflow.py           # DotSwarmWorkflow
+  tool.py               # DotSwarmTool
+  stigmergic.py         # StigmergicSwarm
+  README.md             # (this document, condensed)
+
+tests/integrations/test_dot_swarm/
+  test_provider.py      # standalone tests (no swarms dep)
+  test_workflow.py      # standalone tests
+  test_tool.py          # standalone tests
+  test_stigmergic.py    # integration tests (requires swarms)
+</code></pre></div></div>
+
+<p>The source for these files already exists in <code class="language-plaintext highlighter-rouge">dot_swarm</code>:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">src/dot_swarm/swarms_provider.py</code> — all four classes</li>
+  <li><code class="language-plaintext highlighter-rouge">tests/test_swarms_provider.py</code> — 33 standalone tests, all passing</li>
+</ul>
+
+<hr />
+
+<h2 id="relationship-to-swarmsai-concepts">Relationship to swarms.ai Concepts</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>swarms.ai</th>
+      <th>dot_swarm</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">SequentialWorkflow</code></td>
+      <td><code class="language-plaintext highlighter-rouge">DotSwarmWorkflow</code> with <code class="language-plaintext highlighter-rouge">pattern: sequential</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">ConcurrentWorkflow</code></td>
+      <td><code class="language-plaintext highlighter-rouge">DotSwarmWorkflow</code> with <code class="language-plaintext highlighter-rouge">pattern: concurrent</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">MixtureOfAgents</code></td>
+      <td><code class="language-plaintext highlighter-rouge">DotSwarmWorkflow</code> with <code class="language-plaintext highlighter-rouge">pattern: mixture</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">AgentRearrange</code></td>
+      <td><code class="language-plaintext highlighter-rouge">swarm heal --fix</code> (realigns queue/state)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">SwarmRouter</code></td>
+      <td><code class="language-plaintext highlighter-rouge">swarm configure --via</code> (routes to LLM backends)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">SocialAlgorithms</code></td>
+      <td><code class="language-plaintext highlighter-rouge">StigmergicSwarm</code> (indirect coordination)</td>
+    </tr>
+    <tr>
+      <td>AOP (Agent Orchestration Protocol)</td>
+      <td>OGP-lite federation (<code class="language-plaintext highlighter-rouge">swarm federation</code>)</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<h2 id="dependency-notes">Dependency Notes</h2>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">dot-swarm</code> adds no transitive dependencies to the swarms.ai install — only stdlib Python is used.</li>
+  <li><code class="language-plaintext highlighter-rouge">pip install dot-swarm</code> is the only required install for <code class="language-plaintext highlighter-rouge">DotSwarmStateProvider</code>, <code class="language-plaintext highlighter-rouge">DotSwarmWorkflow</code>, and <code class="language-plaintext highlighter-rouge">DotSwarmTool</code>.</li>
+  <li><code class="language-plaintext highlighter-rouge">StigmergicSwarm</code> imports <code class="language-plaintext highlighter-rouge">swarms</code> lazily; ImportError is raised with a helpful message if not installed.</li>
+</ul>
+
+<hr />
+
+<h2 id="test-coverage">Test Coverage</h2>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>tests/test_swarms_provider.py: 33 tests (all standalone, no swarms dep)
+  - DotSwarmStateProvider: 11 tests
+  - DotSwarmWorkflow: 12 tests
+  - DotSwarmTool: 10 tests
+</code></pre></div></div>
+
+<p>All 195 dot_swarm tests pass (<code class="language-plaintext highlighter-rouge">PYTHONPATH=src python3 -m pytest tests/</code>).</p>

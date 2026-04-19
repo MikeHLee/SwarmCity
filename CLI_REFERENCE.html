@@ -1,0 +1,1155 @@
+<h1 id="cli-reference">CLI Reference</h1>
+
+<p><code class="language-plaintext highlighter-rouge">swarm</code> is installed as a standalone command via <code class="language-plaintext highlighter-rouge">pip install dot-swarm</code>.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>pip <span class="nb">install </span>dot-swarm           <span class="c"># base CLI</span>
+pip <span class="nb">install</span> <span class="s1">'dot-swarm[ai]'</span>     <span class="c"># + AWS Bedrock support (boto3)</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="global-options">Global Options</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Flag</th>
+      <th>Default</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">--path PATH</code></td>
+      <td><code class="language-plaintext highlighter-rouge">.</code> (cwd)</td>
+      <td>Root path to search for <code class="language-plaintext highlighter-rouge">.swarm/</code> directory</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">--version</code></td>
+      <td>—</td>
+      <td>Print version and exit</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">--help</code></td>
+      <td>—</td>
+      <td>Show help</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>All commands inherit <code class="language-plaintext highlighter-rouge">--path</code>. Example: <code class="language-plaintext highlighter-rouge">swarm --path ../oasis-cloud status</code></p>
+
+<hr />
+
+<h2 id="initialization">Initialization</h2>
+
+<h3 id="swarm-init"><code class="language-plaintext highlighter-rouge">swarm init</code></h3>
+
+<p>Initialize a <code class="language-plaintext highlighter-rouge">.swarm/</code> directory in the current repo.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm init                   <span class="c"># auto-detect org vs division level</span>
+swarm init <span class="nt">--level</span> org       <span class="c"># force org level (ORG- item IDs)</span>
+swarm init <span class="nt">--level</span> division  <span class="c"># force division level</span>
+swarm init <span class="nt">--code</span> CLD        <span class="c"># set division code (default: derived from folder name)</span>
+</code></pre></div></div>
+
+<p>Creates: <code class="language-plaintext highlighter-rouge">BOOTSTRAP.md</code>, <code class="language-plaintext highlighter-rouge">context.md</code>, <code class="language-plaintext highlighter-rouge">state.md</code>, <code class="language-plaintext highlighter-rouge">queue.md</code>, <code class="language-plaintext highlighter-rouge">memory.md</code></p>
+
+<hr />
+
+<h2 id="situational-awareness">Situational Awareness</h2>
+
+<h3 id="swarm-status"><code class="language-plaintext highlighter-rouge">swarm status</code></h3>
+
+<p>Print current state and active/pending queue items for this division.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm status          <span class="c"># active + pending items only</span>
+swarm status <span class="nt">--all</span>    <span class="c"># include done items</span>
+</code></pre></div></div>
+
+<h3 id="swarm-ls"><code class="language-plaintext highlighter-rouge">swarm ls</code></h3>
+
+<p>List queue items with filtering.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm <span class="nb">ls</span>                            <span class="c"># all items</span>
+swarm <span class="nb">ls</span> <span class="nt">--section</span> active           <span class="c"># active only</span>
+swarm <span class="nb">ls</span> <span class="nt">--section</span> pending          <span class="c"># pending only</span>
+swarm <span class="nb">ls</span> <span class="nt">--priority</span> high            <span class="c"># filter by priority</span>
+swarm <span class="nb">ls</span> <span class="nt">--project</span> cloud-stability  <span class="c"># filter by project tag</span>
+</code></pre></div></div>
+
+<h3 id="swarm-explore"><code class="language-plaintext highlighter-rouge">swarm explore</code></h3>
+
+<p>Show the heartbeat of all divisions in the colony. Recursively discovers <code class="language-plaintext highlighter-rouge">.swarm/</code> directories.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm explore                       <span class="c"># from current directory, depth 2</span>
+swarm explore <span class="nt">--depth</span> 3             <span class="c"># search deeper</span>
+swarm <span class="nt">--path</span> ~/org explore          <span class="c"># from org root</span>
+</code></pre></div></div>
+
+<h3 id="swarm-report"><code class="language-plaintext highlighter-rouge">swarm report</code></h3>
+
+<p>Generate a full markdown report of all divisions. Unlike <code class="language-plaintext highlighter-rouge">explore</code>, outputs a complete
+document suitable for sharing, filing as a GitHub issue, or posting to a wiki.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm report                        <span class="c"># print to stdout</span>
+swarm report <span class="nt">--out</span> REPORT.md        <span class="c"># write to file</span>
+swarm report <span class="nt">--only</span> active          <span class="c"># active items only</span>
+swarm report <span class="nt">--no-done</span>              <span class="c"># skip done sections</span>
+</code></pre></div></div>
+
+<h3 id="swarm-ready"><code class="language-plaintext highlighter-rouge">swarm ready</code></h3>
+
+<p>List OPEN items with all dependencies satisfied — safe to pick up right now.
+Equivalent to <code class="language-plaintext highlighter-rouge">bd ready</code> in the Gastown/Beads ecosystem.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm ready            <span class="c"># human-readable list</span>
+swarm ready <span class="nt">--json</span>     <span class="c"># machine-readable JSON array (for agent scripts)</span>
+</code></pre></div></div>
+
+<p>Only items in the <code class="language-plaintext highlighter-rouge">Pending</code> section with state <code class="language-plaintext highlighter-rouge">OPEN</code> whose entire <code class="language-plaintext highlighter-rouge">depends:</code> chain
+appears in the <code class="language-plaintext highlighter-rouge">Done</code> section are shown. Items with no dependencies are always listed.</p>
+
+<hr />
+
+<h2 id="work-item-lifecycle">Work Item Lifecycle</h2>
+
+<h3 id="swarm-add"><code class="language-plaintext highlighter-rouge">swarm add</code></h3>
+
+<p>Add a new work item to the Pending queue.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm add <span class="s2">"Add request ID tracing to all services"</span>
+swarm add <span class="s2">"Fix Redis timeout"</span> <span class="nt">--priority</span> high <span class="nt">--project</span> infra
+swarm add <span class="s2">"OAuth2 discovery"</span> <span class="nt">--notes</span> <span class="s2">"See RFC 8414 for discovery spec"</span>
+</code></pre></div></div>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm add <span class="s2">"Add request ID tracing to all services"</span>
+swarm add <span class="s2">"Fix Redis timeout"</span> <span class="nt">--priority</span> high <span class="nt">--project</span> infra
+swarm add <span class="s2">"OAuth2 discovery"</span> <span class="nt">--notes</span> <span class="s2">"See RFC 8414 for discovery spec"</span>
+swarm add <span class="s2">"Run integration tests"</span> <span class="nt">--depends</span> CLD-042,CLD-043
+swarm add <span class="s2">"Implement rate limiter"</span> <span class="nt">--max-retries</span> 5  <span class="c"># override inspector retry limit for this task</span>
+</code></pre></div></div>
+
+<p>Options: <code class="language-plaintext highlighter-rouge">--priority [low|medium|high|critical]</code>, <code class="language-plaintext highlighter-rouge">--project TEXT</code>, <code class="language-plaintext highlighter-rouge">--notes TEXT</code>,
+<code class="language-plaintext highlighter-rouge">--depends ITEM-IDs</code> (comma-separated), <code class="language-plaintext highlighter-rouge">--max-retries N</code></p>
+
+<p><strong><code class="language-plaintext highlighter-rouge">--max-retries N</code></strong> sets a task-level retry override for the inspector role. When
+an inspector rejects this item <code class="language-plaintext highlighter-rouge">N</code> times, it is automatically BLOCKED (surfacing in
+<code class="language-plaintext highlighter-rouge">swarm audit</code> and <code class="language-plaintext highlighter-rouge">swarm status</code>) rather than re-opened. Set to <code class="language-plaintext highlighter-rouge">0</code> (default) to
+inherit the inspector role’s <code class="language-plaintext highlighter-rouge">max_iterations</code> setting.</p>
+
+<h3 id="swarm-claim"><code class="language-plaintext highlighter-rouge">swarm claim</code></h3>
+
+<p>Claim an item (move Active, stamp with agent ID + timestamp).</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm claim CLD-042
+swarm claim CLD-042 <span class="nt">--agent</span> my-agent-id
+</code></pre></div></div>
+
+<h3 id="swarm-done"><code class="language-plaintext highlighter-rouge">swarm done</code></h3>
+
+<p>Mark a claimed item as done.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm <span class="k">done </span>CLD-042
+swarm <span class="k">done </span>CLD-042 <span class="nt">--note</span> <span class="s2">"Used converse API instead of invoke-model"</span>
+swarm <span class="k">done </span>CLD-042 <span class="nt">--next</span> <span class="s2">"Pick up CLD-043 next"</span>   <span class="c"># update state.md focus</span>
+</code></pre></div></div>
+
+<blockquote class="warning">
+  <p><strong>Inspector gate:</strong> When the <strong>inspector</strong> role is enabled, <code class="language-plaintext highlighter-rouge">swarm done</code> is blocked
+unless the item has valid proof attached. Workers must use <code class="language-plaintext highlighter-rouge">swarm partial --proof</code>
+first, then an inspector agent runs <code class="language-plaintext highlighter-rouge">swarm inspect --pass</code>. Use <code class="language-plaintext highlighter-rouge">--force</code> to bypass
+as a human director.</p>
+</blockquote>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm <span class="k">done </span>CLD-042 <span class="nt">--force</span>    <span class="c"># human director override</span>
+</code></pre></div></div>
+
+<h3 id="swarm-partial"><code class="language-plaintext highlighter-rouge">swarm partial</code></h3>
+
+<p>Checkpoint progress on a claimed item without marking it done. Updates the item’s
+in-progress note and refreshes the claim timestamp.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm partial CLD-042 <span class="nt">--note</span> <span class="s2">"Auth header parsing done, token validation next"</span>
+</code></pre></div></div>
+
+<p><strong>With proof (required when inspector role is enabled):</strong></p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm partial CLD-042 <span class="nt">--proof</span> <span class="s2">"branch:feature/oauth2 commit:abc1234 tests:42/42"</span>
+</code></pre></div></div>
+
+<p>The <code class="language-plaintext highlighter-rouge">--proof</code> value is a space-separated list of <code class="language-plaintext highlighter-rouge">key:value</code> pairs. Required fields
+are validated against the inspector role config (<code class="language-plaintext highlighter-rouge">branch</code> and <code class="language-plaintext highlighter-rouge">commit</code> by default).
+A warning is printed if required fields are missing — the inspector will reject the
+item unless they are present.</p>
+
+<p>See <a href="ROLES.md#inspector">Agent Roles → Inspector</a> for the full proof workflow.</p>
+
+<h3 id="swarm-block"><code class="language-plaintext highlighter-rouge">swarm block</code></h3>
+
+<p>Mark a claimed item as blocked.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm block CLD-042 <span class="s2">"Waiting for staging DB credentials from ops"</span>
+</code></pre></div></div>
+
+<h3 id="swarm-unblock"><code class="language-plaintext highlighter-rouge">swarm unblock</code></h3>
+
+<p>Clear a blocked item back to Open (or back to Claimed if an agent is specified).</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm unblock CLD-042                  <span class="c"># → OPEN</span>
+swarm unblock CLD-042 <span class="nt">--reclaim</span>        <span class="c"># → re-CLAIMED by current agent</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="memory--audit">Memory &amp; Audit</h2>
+
+<h3 id="swarm-audit"><code class="language-plaintext highlighter-rouge">swarm audit</code></h3>
+
+<p>Check for drift: stale claims, blocked items, pending items, security scan, and AI-powered code-vs-docs drift check.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm audit                  <span class="c"># Basic: stale claims + blocked items (always shown)</span>
+swarm audit <span class="nt">--pending</span>        <span class="c"># Also list all pending items</span>
+swarm audit <span class="nt">--security</span>       <span class="c"># Add adversarial content scan of .swarm/ files</span>
+swarm audit <span class="nt">--drift</span>          <span class="c"># Add AI code-vs-docs drift check (requires LLM backend)</span>
+swarm audit <span class="nt">--trail</span>          <span class="c"># Verify pheromone trail HMAC signatures</span>
+swarm audit <span class="nt">--full</span>           <span class="c"># All of the above</span>
+swarm audit <span class="nt">--since</span> 24       <span class="c"># Stale threshold in hours (default: 48)</span>
+</code></pre></div></div>
+
+<p><strong><code class="language-plaintext highlighter-rouge">--security</code></strong> scans <code class="language-plaintext highlighter-rouge">.swarm/</code> markdown files and platform shims (CLAUDE.md, .windsurfrules, .cursorrules) for:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">CRITICAL</code>: Prompt injection, instruction erasure, persona hijacking, jailbreaks, LLM template injection</li>
+  <li><code class="language-plaintext highlighter-rouge">HIGH</code>: Non-disclosure directives, hidden instructions, control characters, priority manipulation</li>
+  <li><code class="language-plaintext highlighter-rouge">MEDIUM</code>: Hidden HTML/markdown comments, HTML injection, code injection</li>
+</ul>
+
+<p><strong><code class="language-plaintext highlighter-rouge">--drift</code></strong> runs the same AI analysis as the GitHub Actions drift-check workflow, locally. Compares the last 5 commits against <code class="language-plaintext highlighter-rouge">.swarm/</code> state to detect misalignment.</p>
+
+<p><strong><code class="language-plaintext highlighter-rouge">--trail</code></strong> re-verifies every HMAC-SHA256 signature in <code class="language-plaintext highlighter-rouge">trail.log</code>. Tampered entries are flagged with the agent fingerprint responsible.</p>
+
+<h3 id="swarm-heal"><code class="language-plaintext highlighter-rouge">swarm heal</code></h3>
+
+<p>Full health pass: alignment + security scan + trail verification. Runs everything in sequence and logs all security findings to <code class="language-plaintext highlighter-rouge">memory.md</code> (findings are never silently swallowed).</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm heal                   <span class="c"># Read-only health check</span>
+swarm heal <span class="nt">--fix</span>             <span class="c"># Quarantine adversarial content + block tampered trail signers</span>
+swarm heal <span class="nt">--depth</span> 2         <span class="c"># Descend two levels into child divisions (default: 1)</span>
+</code></pre></div></div>
+
+<p><strong>Sections run by <code class="language-plaintext highlighter-rouge">swarm heal</code>:</strong></p>
+<ol>
+  <li><strong>Alignment</strong> — ascend (local ↔ parent) + descend (local ↔ children). Identifies orphaned items with no cross-division links.</li>
+  <li><strong>Queue Health</strong> — stale claims, blocked items, pending item count.</li>
+  <li><strong>Security Scan</strong> — same 18-pattern scan as <code class="language-plaintext highlighter-rouge">swarm audit --security</code>, covering all <code class="language-plaintext highlighter-rouge">.swarm/</code> files and platform shims.</li>
+  <li><strong>Pheromone Trail Integrity</strong> — HMAC-SHA256 re-verification of <code class="language-plaintext highlighter-rouge">trail.log</code>.</li>
+  <li><strong>Summary</strong> — total issues, memory.md log entry, remediation hint if <code class="language-plaintext highlighter-rouge">--fix</code> not used.</li>
+</ol>
+
+<p><strong>With <code class="language-plaintext highlighter-rouge">--fix</code>:</strong></p>
+<ul>
+  <li>Copies flagged files to <code class="language-plaintext highlighter-rouge">.swarm/quarantine/&lt;timestamp&gt;_&lt;file&gt;.bak</code> for human forensic review. Does <strong>not</strong> auto-delete content — humans must excise injections.</li>
+  <li>Blocks HMAC fingerprints of tampered trail entries in <code class="language-plaintext highlighter-rouge">.swarm/blocked_peers.json</code>.</li>
+  <li>Run <code class="language-plaintext highlighter-rouge">swarm heal</code> again after cleaning to confirm resolution.</li>
+</ul>
+
+<h3 id="swarm-handoff"><code class="language-plaintext highlighter-rouge">swarm handoff</code></h3>
+
+<p>Print a structured handoff note for the current session — what was done, what’s in
+flight, what’s next. Useful at the end of a work session.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm handoff
+swarm handoff <span class="nt">--format</span> json    <span class="c"># machine-readable output</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="federation">Federation</h2>
+
+<p>OGP-lite cross-swarm federation — exchange work items and alignment signals between separate <code class="language-plaintext highlighter-rouge">.swarm/</code> hierarchies using signed intent messages. Trust is bilateral and explicit; there is no central registry.</p>
+
+<p><strong>Key design principles (from OGP build learnings):</strong></p>
+<ul>
+  <li>Identity is always derived from a stored key fingerprint, never from a path or claimed header field.</li>
+  <li>Peer records are persisted <em>before</em> the trust operation returns (avoids the “addPeer lost on restart” bug).</li>
+  <li>Every inbound message passes through a three-layer doorman before any queue operation is executed.</li>
+</ul>
+
+<h3 id="swarm-federation-init"><code class="language-plaintext highlighter-rouge">swarm federation init</code></h3>
+
+<p>Create the <code class="language-plaintext highlighter-rouge">federation/</code> directory structure inside <code class="language-plaintext highlighter-rouge">.swarm/</code>.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm federation init
+</code></pre></div></div>
+
+<p>Creates: <code class="language-plaintext highlighter-rouge">federation/trusted_peers/</code>, <code class="language-plaintext highlighter-rouge">federation/inbox/</code>, <code class="language-plaintext highlighter-rouge">federation/outbox/</code>, <code class="language-plaintext highlighter-rouge">federation/policy.md</code>, <code class="language-plaintext highlighter-rouge">federation/exports.md</code>.</p>
+
+<h3 id="swarm-federation-export-id"><code class="language-plaintext highlighter-rouge">swarm federation export-id</code></h3>
+
+<p>Print this swarm’s public identity — the file to share with federation peers out-of-band (email, Slack, git).</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm federation export-id              <span class="c"># print to stdout</span>
+swarm federation export-id <span class="nt">--out</span> id.json  <span class="c"># write to file</span>
+</code></pre></div></div>
+
+<p>This is safe to commit or share. The private <code class="language-plaintext highlighter-rouge">.signing_key</code> is never exposed.</p>
+
+<h3 id="swarm-federation-trust"><code class="language-plaintext highlighter-rouge">swarm federation trust</code></h3>
+
+<p>Import a peer’s identity file and establish bilateral trust.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm federation trust peer_identity.json
+swarm federation trust peer_identity.json <span class="nt">--name</span> <span class="s2">"Acme Corp"</span> <span class="nt">--scopes</span> <span class="s2">"work_request,alignment_signal"</span>
+</code></pre></div></div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Option</th>
+      <th>Default</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">--name NAME</code></td>
+      <td>peer’s swarm ID</td>
+      <td>Human-readable label</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">--scopes SCOPES</code></td>
+      <td><code class="language-plaintext highlighter-rouge">work_request,alignment_signal</code></td>
+      <td>Comma-separated list of permitted intents</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="swarm-federation-revoke"><code class="language-plaintext highlighter-rouge">swarm federation revoke</code></h3>
+
+<p>Remove a peer from trusted peers.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm federation revoke &lt;fingerprint&gt;
+</code></pre></div></div>
+
+<h3 id="swarm-federation-peers"><code class="language-plaintext highlighter-rouge">swarm federation peers</code></h3>
+
+<p>List all trusted federation peers and their permitted scopes.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm federation peers
+</code></pre></div></div>
+
+<h3 id="swarm-federation-send"><code class="language-plaintext highlighter-rouge">swarm federation send</code></h3>
+
+<p>Create a signed outbound intent message in <code class="language-plaintext highlighter-rouge">outbox/</code>. Deliver the resulting file to the peer manually (git push, shared directory, email attachment).</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm federation send &lt;fingerprint&gt; work_request <span class="nt">--desc</span> <span class="s2">"Need help with OAuth2 token exchange"</span>
+swarm federation send &lt;fingerprint&gt; alignment_signal <span class="nt">--context</span> <span class="s2">"Completed auth module"</span>
+swarm federation send &lt;fingerprint&gt; capability_ad <span class="nt">--context</span> <span class="s2">"Available for API integration work"</span>
+</code></pre></div></div>
+
+<p><strong>Intent types:</strong></p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Intent</th>
+      <th>Effect on peer</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">work_request</code></td>
+      <td>Adds item to peer’s queue</td>
+      <td>Requires <code class="language-plaintext highlighter-rouge">work_request</code> scope</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">alignment_signal</code></td>
+      <td>Informational only</td>
+      <td>No queue change at peer</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">capability_ad</code></td>
+      <td>Informational only</td>
+      <td>Advertise what this swarm can do</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="swarm-federation-inbox"><code class="language-plaintext highlighter-rouge">swarm federation inbox</code></h3>
+
+<p>List received messages waiting in <code class="language-plaintext highlighter-rouge">inbox/</code>.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm federation inbox
+</code></pre></div></div>
+
+<h3 id="swarm-federation-apply"><code class="language-plaintext highlighter-rouge">swarm federation apply</code></h3>
+
+<p>Apply a received inbox message to this swarm’s queue after doorman enforcement.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm federation apply inbox/20260406T1400Z_work_request_ab123456.json
+swarm federation apply inbox/msg.json <span class="nt">--yes</span>   <span class="c"># skip confirmation prompt</span>
+</code></pre></div></div>
+
+<p><strong>Doorman enforcement sequence</strong> (Layer 1 → 2 → 3):</p>
+<ol>
+  <li>Parse the message and read <code class="language-plaintext highlighter-rouge">from_fingerprint</code> from the message body (never the claimed header)</li>
+  <li>Layer 2: Is this fingerprint in <code class="language-plaintext highlighter-rouge">trusted_peers/</code>? Does their record permit this intent?</li>
+  <li>Layer 1: Does <code class="language-plaintext highlighter-rouge">federation/policy.md</code> allow this intent globally?</li>
+</ol>
+
+<p>A <code class="language-plaintext highlighter-rouge">403</code>-equivalent reason is printed for any failure at any layer.</p>
+
+<h3 id="federation-policy">Federation Policy</h3>
+
+<p><code class="language-plaintext highlighter-rouge">federation/policy.md</code> is Layer 1 of the scope model. To disable an intent globally:</p>
+
+<div class="language-markdown highlighter-rouge"><div class="highlight"><pre class="highlight"><code>disabled: work_request
+</code></pre></div></div>
+
+<p>Per-peer scopes in <code class="language-plaintext highlighter-rouge">trusted_peers/&lt;fingerprint&gt;.json</code> are Layer 2. Both must pass for a message to be applied.</p>
+
+<h3 id="upgrade-path">Upgrade Path</h3>
+
+<p>The current implementation exchanges identity files out-of-band and signs messages with HMAC-SHA256 for local trail integrity. The natural upgrade path to full OGP:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Now (OGP-lite)</th>
+      <th>Full OGP</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Identity via <code class="language-plaintext highlighter-rouge">swarm federation export-id</code> (manual)</td>
+      <td>Ed25519 public key, discoverable via DNS <code class="language-plaintext highlighter-rouge">_ogp.example.com</code> TXT record</td>
+    </tr>
+    <tr>
+      <td>Transport: git push / shared dir / manual</td>
+      <td>HTTP/gRPC OGP gateway</td>
+    </tr>
+    <tr>
+      <td>HMAC-SHA256 local trail signing</td>
+      <td>Ed25519 asymmetric signatures (peers can verify independently)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">trusted_peers/</code> files</td>
+      <td>Bilateral gateway trust handshake</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<h2 id="scheduling">Scheduling</h2>
+
+<p>Schedules are stored in <code class="language-plaintext highlighter-rouge">.swarm/schedules.md</code>. No daemon required — intended to be called from the system crontab or triggered manually.</p>
+
+<h3 id="swarm-schedule-list"><code class="language-plaintext highlighter-rouge">swarm schedule list</code></h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm schedule list
+</code></pre></div></div>
+
+<h3 id="swarm-schedule-add"><code class="language-plaintext highlighter-rouge">swarm schedule add</code></h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm schedule add <span class="s1">'0 */6 * * *'</span> <span class="s1">'swarm heal --fix'</span>             <span class="c"># every 6 hours</span>
+swarm schedule add <span class="s1">'6h'</span> <span class="s1">'swarm audit --security'</span> <span class="nt">--name</span> <span class="s1">'Security check'</span>
+swarm schedule add <span class="s1">'on:done CLD-042'</span> <span class="s1">'swarm ai "claim CLD-043"'</span>  <span class="c"># event-driven</span>
+</code></pre></div></div>
+
+<p><strong>Schedule types:</strong></p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Type</th>
+      <th>Spec format</th>
+      <th>Example</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">cron</code></td>
+      <td>5-field cron</td>
+      <td><code class="language-plaintext highlighter-rouge">0 9 * * 1</code> (Mondays 9am)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">interval</code></td>
+      <td><code class="language-plaintext highlighter-rouge">Nm</code> / <code class="language-plaintext highlighter-rouge">Nh</code> / <code class="language-plaintext highlighter-rouge">Nd</code></td>
+      <td><code class="language-plaintext highlighter-rouge">30m</code>, <code class="language-plaintext highlighter-rouge">6h</code>, <code class="language-plaintext highlighter-rouge">2d</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">on:done</code></td>
+      <td><code class="language-plaintext highlighter-rouge">on:done ITEM-ID</code></td>
+      <td><code class="language-plaintext highlighter-rouge">on:done CLD-042</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">on:blocked</code></td>
+      <td><code class="language-plaintext highlighter-rouge">on:blocked ITEM-ID</code></td>
+      <td><code class="language-plaintext highlighter-rouge">on:blocked CLD-042</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="swarm-schedule-remove"><code class="language-plaintext highlighter-rouge">swarm schedule remove</code></h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm schedule remove SCHED-001
+</code></pre></div></div>
+
+<h3 id="swarm-schedule-run"><code class="language-plaintext highlighter-rouge">swarm schedule run</code></h3>
+
+<p>Manually trigger a specific schedule regardless of due status.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm schedule run SCHED-001
+</code></pre></div></div>
+
+<h3 id="swarm-schedule-run-due"><code class="language-plaintext highlighter-rouge">swarm schedule run-due</code></h3>
+
+<p>Run all currently-due cron/interval schedules. Add to system crontab:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># In crontab (crontab -e):</span>
+<span class="k">*</span> <span class="k">*</span> <span class="k">*</span> <span class="k">*</span> <span class="k">*</span>  <span class="nb">cd</span> /path/to/repo <span class="o">&amp;&amp;</span> swarm schedule run-due
+
+<span class="c"># Or manually:</span>
+swarm schedule run-due
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="workflows">Workflows</h2>
+
+<p>Workflows are markdown files in <code class="language-plaintext highlighter-rouge">.swarm/workflows/*.md</code> with a YAML frontmatter header. They define multi-step sequences of <code class="language-plaintext highlighter-rouge">swarm</code> commands or arbitrary shell commands.</p>
+
+<p><strong>Patterns</strong> (inspired by swarms.ai):</p>
+<ul>
+  <li><strong><code class="language-plaintext highlighter-rouge">sequential</code></strong> — steps run in order; halts on first failure</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">concurrent</code></strong> — all steps run in parallel threads</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">conditional</code></strong> — steps have <code class="language-plaintext highlighter-rouge">if:</code> guards based on previous step results</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">mixture</code></strong> — concurrent with result aggregation (implement per-step <code class="language-plaintext highlighter-rouge">agent:</code> assignments)</li>
+</ul>
+
+<h3 id="swarm-workflow-create"><code class="language-plaintext highlighter-rouge">swarm workflow create</code></h3>
+
+<p>Scaffold a new workflow file.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm workflow create oauth2-flow <span class="nt">--pattern</span> sequential <span class="nt">--trigger</span> <span class="s2">"on:done CLD-041"</span>
+swarm workflow create weekly-report <span class="nt">--pattern</span> sequential <span class="nt">--trigger</span> <span class="s2">"0 9 * * 1"</span>
+</code></pre></div></div>
+
+<p>Edit the generated <code class="language-plaintext highlighter-rouge">.swarm/workflows/&lt;name&gt;.md</code>:</p>
+
+<div class="language-markdown highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nn">---</span>
+<span class="na">trigger</span><span class="pi">:</span> <span class="s">on:done CLD-041</span>
+<span class="na">pattern</span><span class="pi">:</span> <span class="s">sequential</span>
+<span class="na">description</span><span class="pi">:</span> <span class="s">OAuth2 integration sequence</span>
+<span class="nn">---</span>
+
+<span class="gu">## Steps</span>
+<span class="p">
+1.</span> swarm claim CLD-042
+   agent: bedrock
+   timeout: 30
+<span class="p">
+2.</span> swarm claim CLD-043
+   agent: claude
+   depends: CLD-042
+   timeout: 45
+   if: step1.ok
+<span class="p">
+3.</span> swarm heal --fix
+   agent: auto
+   timeout: 5
+</code></pre></div></div>
+
+<h3 id="swarm-workflow-list"><code class="language-plaintext highlighter-rouge">swarm workflow list</code></h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm workflow list
+</code></pre></div></div>
+
+<h3 id="swarm-workflow-show"><code class="language-plaintext highlighter-rouge">swarm workflow show</code></h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm workflow show oauth2-flow
+</code></pre></div></div>
+
+<h3 id="swarm-workflow-run"><code class="language-plaintext highlighter-rouge">swarm workflow run</code></h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm workflow run oauth2-flow              <span class="c"># confirm before running</span>
+swarm workflow run oauth2-flow <span class="nt">--dry-run</span>    <span class="c"># show steps, no execution</span>
+swarm workflow run oauth2-flow <span class="nt">--yes</span>        <span class="c"># skip confirmation</span>
+</code></pre></div></div>
+
+<h3 id="swarm-workflow-status"><code class="language-plaintext highlighter-rouge">swarm workflow status</code></h3>
+
+<p>Show last run result from <code class="language-plaintext highlighter-rouge">.swarm/workflow_runs.jsonl</code>.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm workflow status oauth2-flow
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="ai-interface">AI Interface</h2>
+
+<h3 id="swarm-ai"><code class="language-plaintext highlighter-rouge">swarm ai</code></h3>
+
+<p>Translate a natural-language instruction into <code class="language-plaintext highlighter-rouge">.swarm/</code> operations using an LLM backend.
+Previews proposed changes before executing (unless <code class="language-plaintext highlighter-rouge">--yes</code>).</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm ai <span class="s2">"mark CLD-042 as done, merged the OAuth PR"</span>
+swarm ai <span class="s2">"what should I work on next?"</span>
+swarm ai <span class="s2">"add three items for rate limiting: design, implement, test"</span>
+swarm ai <span class="s2">"write a memory entry: chose NATS over Kafka for lower latency"</span>
+swarm ai <span class="s2">"update focus to markets ASGI fix"</span> <span class="nt">--yes</span>
+
+<span class="c"># With a specific backend:</span>
+swarm ai <span class="s2">"summarise the queue"</span> <span class="nt">--via</span> claude
+swarm ai <span class="s2">"what needs doing?"</span> <span class="nt">--via</span> gemini
+swarm ai <span class="s2">"mark done"</span> <span class="nt">--via</span> bedrock      <span class="c"># explicit Bedrock (default)</span>
+</code></pre></div></div>
+
+<p>Options: <code class="language-plaintext highlighter-rouge">--yes / -y</code>, <code class="language-plaintext highlighter-rouge">--agent TEXT</code>, <code class="language-plaintext highlighter-rouge">--limit INT</code> (context token budget), <code class="language-plaintext highlighter-rouge">--via [bedrock|claude|gemini|opencode]</code>, <code class="language-plaintext highlighter-rouge">--chain</code>, <code class="language-plaintext highlighter-rouge">--max-steps INT</code></p>
+
+<p><strong>Workflow chaining (<code class="language-plaintext highlighter-rouge">--chain</code>)</strong>:</p>
+
+<p>With <code class="language-plaintext highlighter-rouge">--chain</code>, the AI is re-invoked after each successful set of write operations using the refreshed <code class="language-plaintext highlighter-rouge">.swarm/</code> context. This continues until the AI returns no further write ops (work is complete) or <code class="language-plaintext highlighter-rouge">--max-steps</code> is reached.</p>
+
+<p>Each batch of chained operations is signed and recorded in <code class="language-plaintext highlighter-rouge">trail.log</code>.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm ai <span class="s2">"run the OAuth2 workflow: discovery, token exchange, refresh"</span> <span class="nt">--chain</span> <span class="nt">--yes</span>
+swarm ai <span class="s2">"implement auth, then markets, then geo modules"</span> <span class="nt">--chain</span> <span class="nt">--max-steps</span> 9 <span class="nt">--yes</span>
+swarm ai <span class="s2">"process the full pending queue"</span> <span class="nt">--chain</span> <span class="nt">--max-steps</span> 20 <span class="nt">--yes</span>
+</code></pre></div></div>
+
+<p>Use <code class="language-plaintext highlighter-rouge">--yes</code> with <code class="language-plaintext highlighter-rouge">--chain</code> for fully automated runs; omit it to confirm each step interactively.</p>
+
+<h3 id="swarm-session"><code class="language-plaintext highlighter-rouge">swarm session</code></h3>
+
+<p>Launch an interactive LLM session in the division root, seeded with <code class="language-plaintext highlighter-rouge">.swarm/</code> context.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm session                          <span class="c"># interactive, auto-detect CLI</span>
+swarm session <span class="nt">--with</span> claude            <span class="c"># prefer Claude Code</span>
+swarm session <span class="nt">--with</span> gemini            <span class="c"># prefer Gemini CLI</span>
+swarm session <span class="s2">"what should I pick up?"</span> <span class="c"># single non-interactive turn</span>
+</code></pre></div></div>
+
+<p>For <strong>Claude Code</strong>: CLAUDE.md already loads <code class="language-plaintext highlighter-rouge">.swarm/</code> context automatically.
+For <strong>gemini / opencode</strong>: writes <code class="language-plaintext highlighter-rouge">.swarm/CURRENT_SESSION.md</code> context file first.</p>
+
+<hr />
+
+<h2 id="agent-roles">Agent Roles</h2>
+
+<p>Agent roles extend multi-agent task mode with structured behaviors. See
+<a href="ROLES.md">Agent Roles</a> for the full conceptual guide. All role state is stored in
+<code class="language-plaintext highlighter-rouge">.swarm/roles/&lt;name&gt;.json</code> — enabling or disabling a role never modifies <code class="language-plaintext highlighter-rouge">queue.md</code>.</p>
+
+<h3 id="swarm-role-list"><code class="language-plaintext highlighter-rouge">swarm role list</code></h3>
+
+<p>Show all known roles and their current status.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm role list
+</code></pre></div></div>
+
+<h3 id="swarm-role-enable"><code class="language-plaintext highlighter-rouge">swarm role enable</code></h3>
+
+<p>Enable a role (or reconfigure it if already enabled).</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm role <span class="nb">enable </span>inspector
+swarm role <span class="nb">enable </span>inspector <span class="nt">--max-iterations</span> 3 <span class="nt">--require-proof</span> <span class="s2">"branch,commit,tests"</span>
+swarm role <span class="nb">enable </span>inspector <span class="nt">--agent</span> inspector-bot-1
+swarm role <span class="nb">enable </span>watchdog
+swarm role <span class="nb">enable </span>supervisor
+swarm role <span class="nb">enable </span>librarian
+</code></pre></div></div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Option</th>
+      <th>Default</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">--max-iterations N</code></td>
+      <td><code class="language-plaintext highlighter-rouge">3</code></td>
+      <td>(inspector) Fail count before watchdog escalation</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">--require-proof FIELDS</code></td>
+      <td><code class="language-plaintext highlighter-rouge">branch,commit</code></td>
+      <td>(inspector) Comma-separated required proof fields</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">--agent AGENT_ID</code></td>
+      <td><em>(any)</em></td>
+      <td>Assign a specific agent ID to this role</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="swarm-role-disable"><code class="language-plaintext highlighter-rouge">swarm role disable</code></h3>
+
+<p>Remove a role config (idempotent).</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm role disable inspector
+</code></pre></div></div>
+
+<h3 id="swarm-role-show"><code class="language-plaintext highlighter-rouge">swarm role show</code></h3>
+
+<p>Print full configuration for a role.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm role show inspector
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="inspector">Inspector</h2>
+
+<p>The <code class="language-plaintext highlighter-rouge">swarm inspect</code> command is used by the inspector agent to verify a worker’s
+proof-of-work and either pass (mark done) or fail (re-open) a work item.</p>
+
+<p>The inspector role must be enabled first: <code class="language-plaintext highlighter-rouge">swarm role enable inspector</code>.</p>
+
+<h3 id="swarm-inspect"><code class="language-plaintext highlighter-rouge">swarm inspect</code></h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm inspect CLD-042 <span class="nt">--pass</span>
+swarm inspect CLD-042 <span class="nt">--pass</span> <span class="nt">--note</span> <span class="s2">"Tests pass, code reviewed"</span>
+
+swarm inspect CLD-042 <span class="nt">--fail</span> <span class="nt">--reason</span> <span class="s2">"Edge case X not handled — see test_auth.py:142"</span>
+</code></pre></div></div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Option</th>
+      <th>Required</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">--pass</code></td>
+      <td>one of</td>
+      <td>Accept proof — mark item done, sign in trail</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">--fail</code></td>
+      <td>one of</td>
+      <td>Reject proof — reopen item, increment <code class="language-plaintext highlighter-rouge">inspect_fails</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">--reason TEXT</code></td>
+      <td>with <code class="language-plaintext highlighter-rouge">--fail</code></td>
+      <td>Explanation written back to the item’s notes</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">--agent TEXT</code></td>
+      <td>no</td>
+      <td>Inspector agent ID override</td>
+    </tr>
+  </tbody>
+</table>
+
+<p><strong>On <code class="language-plaintext highlighter-rouge">--pass</code>:</strong> item moves to Done, inspector agent ID is recorded, operation signed
+in <code class="language-plaintext highlighter-rouge">trail.log</code>.</p>
+
+<p><strong>On <code class="language-plaintext highlighter-rouge">--fail</code>:</strong> item moves back to OPEN, <code class="language-plaintext highlighter-rouge">proof:</code> is cleared, <code class="language-plaintext highlighter-rouge">inspect_fails</code> is
+incremented. If <code class="language-plaintext highlighter-rouge">inspect_fails &gt;= max_iterations</code> and watchdog is enabled, an
+escalation alert is printed.</p>
+
+<p>See <a href="ROLES.md#inspector">Agent Roles → Inspector</a> for the full workflow diagram.</p>
+
+<hr />
+
+<hr />
+
+<h2 id="spawn--crawl">Spawn &amp; Crawl</h2>
+
+<h3 id="swarm-spawn"><code class="language-plaintext highlighter-rouge">swarm spawn</code></h3>
+
+<p>Launch an agent CLI in a named tmux window for a specific work item or role.
+Requires <strong>tmux 3.0+</strong> and the chosen agent CLI on PATH.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Worker — claim and open</span>
+swarm spawn SWC-042                          <span class="c"># opencode worker, auto-claims item</span>
+swarm spawn SWC-042 <span class="nt">--agent</span> claude           <span class="c"># Claude Code worker</span>
+swarm spawn SWC-042 <span class="nt">--agent</span> ollama           <span class="c"># local Ollama worker</span>
+swarm spawn SWC-042 <span class="nt">--no-claim</span>               <span class="c"># open window without claiming</span>
+
+<span class="c"># Role agents</span>
+swarm spawn <span class="nt">--role</span> inspector                  <span class="c"># inspector monitor window</span>
+swarm spawn <span class="nt">--role</span> supervisor                 <span class="c"># supervisor overview window</span>
+swarm spawn <span class="nt">--role</span> watchdog                   <span class="c"># watchdog audit loop</span>
+
+<span class="c"># Session control</span>
+swarm spawn SWC-042 <span class="nt">--session</span> my-project     <span class="c"># custom tmux session name</span>
+swarm spawn SWC-042 <span class="nt">--window-name</span> auth-fix   <span class="c"># custom window name</span>
+swarm spawn SWC-042 <span class="nt">--agent-id</span> my-agent-42   <span class="c"># explicit SWARM_AGENT_ID</span>
+</code></pre></div></div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Option</th>
+      <th>Default</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">--agent</code></td>
+      <td><code class="language-plaintext highlighter-rouge">opencode</code></td>
+      <td>Agent CLI: <code class="language-plaintext highlighter-rouge">opencode</code>, <code class="language-plaintext highlighter-rouge">claude</code>, <code class="language-plaintext highlighter-rouge">ollama</code>, <code class="language-plaintext highlighter-rouge">bedrock</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">--role</code></td>
+      <td>—</td>
+      <td>Spawn as a role agent (<code class="language-plaintext highlighter-rouge">inspector</code>, <code class="language-plaintext highlighter-rouge">supervisor</code>, <code class="language-plaintext highlighter-rouge">watchdog</code>)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">--session</code></td>
+      <td><code class="language-plaintext highlighter-rouge">swarm</code></td>
+      <td>tmux session name (created if absent)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">--window-name</code></td>
+      <td>item_id or role</td>
+      <td>tmux window name</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">--no-claim</code></td>
+      <td>false</td>
+      <td>Skip auto-claiming the item</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">--agent-id</code></td>
+      <td><code class="language-plaintext highlighter-rouge">spawn-&lt;id&gt;-&lt;ts&gt;</code></td>
+      <td>Override <code class="language-plaintext highlighter-rouge">SWARM_AGENT_ID</code> env var</td>
+    </tr>
+  </tbody>
+</table>
+
+<p><strong>Environment set in the tmux window:</strong></p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Variable</th>
+      <th>Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">SWARM_AGENT_ID</code></td>
+      <td>Effective agent ID</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">SWARM_ITEM_ID</code></td>
+      <td>Item being worked on (if any)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">SWARM_ROLE</code></td>
+      <td><code class="language-plaintext highlighter-rouge">worker</code>, <code class="language-plaintext highlighter-rouge">inspector</code>, <code class="language-plaintext highlighter-rouge">supervisor</code>, or <code class="language-plaintext highlighter-rouge">watchdog</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<p><strong>Attach / navigate:</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>tmux attach <span class="nt">-t</span> swarm                     <span class="c"># attach to session</span>
+tmux <span class="k">select</span><span class="nt">-window</span> <span class="nt">-t</span> swarm:SWC-042      <span class="c"># switch to window</span>
+tmux list-windows <span class="nt">-t</span> swarm               <span class="c"># list all windows</span>
+</code></pre></div></div>
+
+<p><strong>Supported agents and install:</strong></p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Agent</th>
+      <th>Install</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">opencode</code></td>
+      <td><code class="language-plaintext highlighter-rouge">npm install -g opencode-ai</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">claude</code></td>
+      <td><a href="https://claude.ai/code">Claude Code CLI</a></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">ollama</code></td>
+      <td><code class="language-plaintext highlighter-rouge">brew install ollama</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">bedrock</code></td>
+      <td><code class="language-plaintext highlighter-rouge">pip install 'dot-swarm[ai]'</code> + <code class="language-plaintext highlighter-rouge">aws configure</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<h3 id="swarm-crawl"><code class="language-plaintext highlighter-rouge">swarm crawl</code></h3>
+
+<p>Walk the current directory tree to build context. Stops descending into any
+subdirectory that already has a <code class="language-plaintext highlighter-rouge">.swarm/</code> directory (those are separate divisions).
+Results are written to <code class="language-plaintext highlighter-rouge">.swarm/context.md</code> under a <code class="language-plaintext highlighter-rouge">## Directory Map</code> section.</p>
+
+<p>Combined with <code class="language-plaintext highlighter-rouge">swarm heal</code>, this replaces the need for a separate librarian role agent.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm crawl                  <span class="c"># catalog from cwd, depth 3</span>
+swarm crawl <span class="nt">--depth</span> 5        <span class="c"># go deeper</span>
+swarm crawl <span class="nt">--create-items</span>   <span class="c"># also create OPEN queue items for each uncatalogued dir</span>
+swarm crawl <span class="nt">--dry-run</span>        <span class="c"># preview without writing anything</span>
+</code></pre></div></div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Option</th>
+      <th>Default</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">--depth N</code></td>
+      <td><code class="language-plaintext highlighter-rouge">3</code></td>
+      <td>Max directory depth to walk</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">--create-items</code></td>
+      <td>false</td>
+      <td>Create OPEN queue items (project: librarian) for each uncatalogued dir</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">--dry-run</code></td>
+      <td>false</td>
+      <td>Print what would be cataloged, write nothing</td>
+    </tr>
+  </tbody>
+</table>
+
+<p><strong>What gets skipped:</strong>
+<code class="language-plaintext highlighter-rouge">.git/</code>, <code class="language-plaintext highlighter-rouge">__pycache__/</code>, <code class="language-plaintext highlighter-rouge">node_modules/</code>, <code class="language-plaintext highlighter-rouge">.venv/</code>, <code class="language-plaintext highlighter-rouge">venv/</code>, <code class="language-plaintext highlighter-rouge">dist/</code>, <code class="language-plaintext highlighter-rouge">build/</code></p>
+
+<p><strong>Example output:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Crawled /Users/me/oasis-cloud
+
+  Swarm divisions found (2) — skipped:
+    services/auth/
+    services/markets/
+
+  Catalogued (4 dirs):
+    docs/ — 12 files (8×.md, 3×.png, 1×.svg)
+    scripts/ — 5 files (5×.sh)
+    config/ — 3 files (2×.toml, 1×.json)
+    tests/fixtures/ — 8 files (8×.json)
+
+  Written to: .swarm/context.md
+
+Run 'swarm heal' to verify context alignment after cataloging.
+</code></pre></div></div>
+
+<hr />
+
+<h3 id="swarm-configure"><code class="language-plaintext highlighter-rouge">swarm configure</code></h3>
+
+<p>Interactive wizard to set your default LLM interface and (if Bedrock) model + region.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm configure
+</code></pre></div></div>
+
+<p>Config stored at <code class="language-plaintext highlighter-rouge">~/.config/swarm/config.toml</code>. Credentials are never stored here —
+use <code class="language-plaintext highlighter-rouge">aws configure</code> or env vars for Bedrock; the respective CLI handles auth for others.</p>
+
+<hr />
+
+<h2 id="setup--ci">Setup &amp; CI</h2>
+
+<h3 id="swarm-setup-drift-check"><code class="language-plaintext highlighter-rouge">swarm setup-drift-check</code></h3>
+
+<p>Install the <code class="language-plaintext highlighter-rouge">swarm-drift-check.yml</code> GitHub Actions workflow into the current repo.
+Uses the <code class="language-plaintext highlighter-rouge">gh</code> CLI to set secrets if needed.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm setup-drift-check           <span class="c"># install workflow file only</span>
+swarm setup-drift-check <span class="nt">--commit</span>  <span class="c"># also commit + push</span>
+</code></pre></div></div>
+
+<p>See <a href="DRIFT_CHECK_SETUP.md">Drift Check Setup</a> for AWS Bedrock prerequisites.</p>
+
+<hr />
+
+<h2 id="item-id-convention">Item ID Convention</h2>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&lt;DIVISION-CODE&gt;-&lt;3-digit-number&gt;
+</code></pre></div></div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Division</th>
+      <th>Code</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Org level</td>
+      <td><code class="language-plaintext highlighter-rouge">ORG</code></td>
+    </tr>
+    <tr>
+      <td>oasis-cloud</td>
+      <td><code class="language-plaintext highlighter-rouge">CLD</code></td>
+    </tr>
+    <tr>
+      <td>oasis-cloud-admin</td>
+      <td><code class="language-plaintext highlighter-rouge">ADM</code></td>
+    </tr>
+    <tr>
+      <td>oasis-weather</td>
+      <td><code class="language-plaintext highlighter-rouge">WTH</code></td>
+    </tr>
+    <tr>
+      <td>oasis-firmware</td>
+      <td><code class="language-plaintext highlighter-rouge">FW</code></td>
+    </tr>
+    <tr>
+      <td>oasis-home</td>
+      <td><code class="language-plaintext highlighter-rouge">HM</code></td>
+    </tr>
+    <tr>
+      <td>oasis-ui</td>
+      <td><code class="language-plaintext highlighter-rouge">UI</code></td>
+    </tr>
+    <tr>
+      <td>oasis-forms</td>
+      <td><code class="language-plaintext highlighter-rouge">FRM</code></td>
+    </tr>
+    <tr>
+      <td>oasis-hardware</td>
+      <td><code class="language-plaintext highlighter-rouge">HW</code></td>
+    </tr>
+    <tr>
+      <td>oasis-welcome</td>
+      <td><code class="language-plaintext highlighter-rouge">WEB</code></td>
+    </tr>
+    <tr>
+      <td>oasis-cloud-wiki</td>
+      <td><code class="language-plaintext highlighter-rouge">WIKI</code></td>
+    </tr>
+    <tr>
+      <td>oasis-records</td>
+      <td><code class="language-plaintext highlighter-rouge">REC</code></td>
+    </tr>
+    <tr>
+      <td>dot_swarm</td>
+      <td><code class="language-plaintext highlighter-rouge">SWC</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<p>IDs are assigned sequentially and never reused.</p>
+
+<hr />
+
+<h2 id="security--trust-model">Security &amp; Trust Model</h2>
+
+<h3 id="pheromone-trail-signing">Pheromone Trail Signing</h3>
+
+<p>Every <code class="language-plaintext highlighter-rouge">swarm init</code> generates a per-swarm HMAC-SHA256 signing identity:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>File</th>
+      <th>Description</th>
+      <th>Commit?</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">.swarm/identity.json</code></td>
+      <td>Public fingerprint (swarm ID, algorithm, created)</td>
+      <td>✅ Yes</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">.swarm/.signing_key</code></td>
+      <td>256-bit private HMAC key</td>
+      <td>❌ No (.gitignored)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">.swarm/trail.log</code></td>
+      <td>Append-only signed operation log</td>
+      <td>❌ No (local only)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">.swarm/blocked_peers.json</code></td>
+      <td>Blocked fingerprints</td>
+      <td>✅ Optional</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Each <code class="language-plaintext highlighter-rouge">swarm ai</code> batch records a signed entry in <code class="language-plaintext highlighter-rouge">trail.log</code>:</p>
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="nl">"timestamp"</span><span class="p">:</span><span class="s2">"2026-04-06T14:00Z"</span><span class="p">,</span><span class="nl">"swarm_id"</span><span class="p">:</span><span class="s2">"a1b2c3d4"</span><span class="p">,</span><span class="nl">"fingerprint"</span><span class="p">:</span><span class="s2">"f8e7d6c5"</span><span class="p">,</span><span class="nl">"agent_id"</span><span class="p">:</span><span class="s2">"cascade"</span><span class="p">,</span><span class="nl">"op"</span><span class="p">:</span><span class="s2">"ai_batch"</span><span class="p">,</span><span class="nl">"payload"</span><span class="p">:{</span><span class="nl">"step"</span><span class="p">:</span><span class="mi">1</span><span class="p">,</span><span class="nl">"ops"</span><span class="p">:[</span><span class="s2">"done"</span><span class="p">,</span><span class="s2">"write_state"</span><span class="p">]},</span><span class="nl">"signature"</span><span class="p">:</span><span class="s2">"abc123..."</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<p>To verify the trail: <code class="language-plaintext highlighter-rouge">swarm audit --trail</code> or <code class="language-plaintext highlighter-rouge">swarm heal</code>.
+To block a bad actor: <code class="language-plaintext highlighter-rouge">swarm heal --fix</code> (auto-blocks tampered fingerprints).</p>
+
+<h3 id="adversarial-content-detection">Adversarial Content Detection</h3>
+
+<p><code class="language-plaintext highlighter-rouge">swarm heal</code> and <code class="language-plaintext highlighter-rouge">swarm audit --security</code> scan for 18 patterns across 3 severity levels:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Severity</th>
+      <th>Categories</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>CRITICAL</strong></td>
+      <td>PROMPT_INJECTION, INSTRUCTION_ERASURE, PERSONA_HIJACK, JAILBREAK, LLM_TEMPLATE_INJECTION, SAFETY_OVERRIDE</td>
+    </tr>
+    <tr>
+      <td><strong>HIGH</strong></td>
+      <td>NON_DISCLOSURE, CONTROL_CHARACTERS, PRIORITY_OVERRIDE</td>
+    </tr>
+    <tr>
+      <td><strong>MEDIUM</strong></td>
+      <td>HIDDEN_HTML_COMMENT, HIDDEN_MD_COMMENT, HTML_INJECTION, CODE_INJECTION</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Files scanned: <code class="language-plaintext highlighter-rouge">state.md</code>, <code class="language-plaintext highlighter-rouge">queue.md</code>, <code class="language-plaintext highlighter-rouge">memory.md</code>, <code class="language-plaintext highlighter-rouge">context.md</code>, <code class="language-plaintext highlighter-rouge">BOOTSTRAP.md</code>, <code class="language-plaintext highlighter-rouge">workflows/*.md</code>, <code class="language-plaintext highlighter-rouge">CLAUDE.md</code>, <code class="language-plaintext highlighter-rouge">.windsurfrules</code>, <code class="language-plaintext highlighter-rouge">.cursorrules</code>, <code class="language-plaintext highlighter-rouge">.github/copilot-instructions.md</code>.</p>
+
+<h3 id="swarmsai-integration">swarms.ai Integration</h3>
+
+<p>For multi-agent frameworks, use the built-in bridge:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="n">dot_swarm.swarms_provider</span> <span class="kn">import</span> <span class="n">DotSwarmStateProvider</span><span class="p">,</span> <span class="n">StigmergicSwarm</span>
+
+<span class="c1"># Inject .swarm/ state into any agent's system prompt
+</span><span class="n">provider</span> <span class="o">=</span> <span class="nc">DotSwarmStateProvider</span><span class="p">(</span><span class="n">swarm_path</span><span class="o">=</span><span class="sh">"</span><span class="s">./.swarm</span><span class="sh">"</span><span class="p">)</span>
+<span class="n">system_prompt</span> <span class="o">=</span> <span class="n">provider</span><span class="p">.</span><span class="nf">build_system_prompt</span><span class="p">(</span><span class="n">agent_name</span><span class="o">=</span><span class="sh">"</span><span class="s">Coordinator</span><span class="sh">"</span><span class="p">)</span>
+
+<span class="c1"># Read queue state
+</span><span class="n">queue</span> <span class="o">=</span> <span class="n">provider</span><span class="p">.</span><span class="nf">get_queue</span><span class="p">()</span>   <span class="c1"># {"active": [...], "pending": [...], "done": [...]}
+</span>
+<span class="c1"># Apply AI response operations back to .swarm/ files
+</span><span class="n">results</span> <span class="o">=</span> <span class="n">provider</span><span class="p">.</span><span class="nf">apply_operations</span><span class="p">(</span><span class="n">llm_response_json</span><span class="p">,</span> <span class="n">agent_id</span><span class="o">=</span><span class="sh">"</span><span class="s">my-agent</span><span class="sh">"</span><span class="p">)</span>
+
+<span class="c1"># Stigmergic multi-agent coordination (requires: pip install swarms)
+</span><span class="kn">from</span> <span class="n">swarms</span> <span class="kn">import</span> <span class="n">Agent</span>
+<span class="n">swarm</span> <span class="o">=</span> <span class="nc">StigmergicSwarm</span><span class="p">(</span><span class="n">swarm_path</span><span class="o">=</span><span class="sh">"</span><span class="s">.</span><span class="sh">"</span><span class="p">,</span> <span class="n">agents</span><span class="o">=</span><span class="p">[</span><span class="n">agent1</span><span class="p">,</span> <span class="n">agent2</span><span class="p">],</span> <span class="n">max_rounds</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">swarm</span><span class="p">.</span><span class="nf">run</span><span class="p">(</span><span class="sh">"</span><span class="s">Implement the OAuth2 integration</span><span class="sh">"</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>Agents coordinate <em>indirectly</em> through <code class="language-plaintext highlighter-rouge">.swarm/</code> files (stigmergic protocol) — no direct agent-to-agent message passing required. Full git audit trail maintained automatically.</p>

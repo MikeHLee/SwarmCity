@@ -1,0 +1,340 @@
+<h1 id="agent-roles">Agent Roles</h1>
+
+<p>Agent roles extend dot_swarm coordination with structured behaviors for multi-agent
+task mode. Every role is <strong>opt-in</strong> — enabling one never affects queue.md or any
+work items until that role’s commands are explicitly invoked. Roles are stored as
+JSON configs in <code class="language-plaintext highlighter-rouge">.swarm/roles/&lt;name&gt;.json</code> and can be toggled at any time.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm role list                        <span class="c"># see all roles + status</span>
+swarm role <span class="nb">enable </span>inspector            <span class="c"># turn on</span>
+swarm role disable inspector           <span class="c"># turn off (removes config file)</span>
+swarm role show inspector              <span class="c"># full config</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="available-roles">Available Roles</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Role</th>
+      <th>Purpose</th>
+      <th>Key command</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>inspector</strong></td>
+      <td>Requires proof-of-work before an item can be marked done</td>
+      <td><code class="language-plaintext highlighter-rouge">swarm inspect</code></td>
+    </tr>
+    <tr>
+      <td><strong>supervisor</strong></td>
+      <td>Holistic progress view across all active items and phases</td>
+      <td><code class="language-plaintext highlighter-rouge">swarm spawn --role supervisor</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<blockquote class="note">
+  <p><strong>Watchdog and Librarian are now built-in.</strong>
+The <strong>watchdog</strong> escalation pattern is now intrinsic to the inspector retry loop —
+items auto-BLOCK when retries are exhausted, surfacing in <code class="language-plaintext highlighter-rouge">swarm audit</code> and
+<code class="language-plaintext highlighter-rouge">swarm status</code> without a separate role agent. Use <code class="language-plaintext highlighter-rouge">swarm spawn --role watchdog</code>
+to open a dedicated monitoring window if you want a live operator.</p>
+
+  <p>The <strong>librarian</strong> catalog function is now <code class="language-plaintext highlighter-rouge">swarm crawl</code>. Run it alongside
+<code class="language-plaintext highlighter-rouge">swarm heal</code> for a full context + alignment pass — no separate role required.</p>
+</blockquote>
+
+<hr />
+
+<h2 id="inspector">Inspector</h2>
+
+<p>The inspector role solves the <strong>“fake done” problem</strong> — an LLM worker marking an item
+complete without actually finishing the work. When enabled, workers cannot call
+<code class="language-plaintext highlighter-rouge">swarm done</code> directly. Instead they must attach proof of work and let a designated
+inspector agent verify it.</p>
+
+<h3 id="enabling">Enabling</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm role <span class="nb">enable </span>inspector
+swarm role <span class="nb">enable </span>inspector <span class="nt">--max-iterations</span> 3 <span class="nt">--require-proof</span> <span class="s2">"branch,commit,tests"</span>
+swarm role <span class="nb">enable </span>inspector <span class="nt">--agent</span> inspector-bot-1
+</code></pre></div></div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Option</th>
+      <th>Default</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">--max-iterations</code></td>
+      <td><code class="language-plaintext highlighter-rouge">3</code></td>
+      <td>Fail count before watchdog escalation</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">--require-proof</code></td>
+      <td><code class="language-plaintext highlighter-rouge">branch,commit</code></td>
+      <td>Comma-separated required proof fields</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">--agent</code></td>
+      <td><em>(any)</em></td>
+      <td>Assign a specific agent ID as inspector</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="worker-flow">Worker flow</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># 1. Claim and do the work normally</span>
+swarm claim CLD-042
+
+<span class="c"># 2. Instead of swarm done, mark partial and attach proof</span>
+swarm partial CLD-042 <span class="nt">--proof</span> <span class="s2">"branch:feature/oauth2 commit:abc1234 tests:42/42"</span>
+<span class="c">#   ^ dot_swarm validates that all required proof fields are present and warns if not</span>
+</code></pre></div></div>
+
+<p>The <code class="language-plaintext highlighter-rouge">proof:</code> field accepts a space-separated list of <code class="language-plaintext highlighter-rouge">key:value</code> pairs. Required fields
+are checked against <code class="language-plaintext highlighter-rouge">require_proof_fields</code> in the role config. Common fields:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Field</th>
+      <th>Example</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">branch</code></td>
+      <td><code class="language-plaintext highlighter-rouge">branch:feature/oauth2</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">commit</code></td>
+      <td><code class="language-plaintext highlighter-rouge">commit:abc1234</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">tests</code></td>
+      <td><code class="language-plaintext highlighter-rouge">tests:42/42</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">diff</code></td>
+      <td><code class="language-plaintext highlighter-rouge">diff:+187/-23</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">pr</code></td>
+      <td><code class="language-plaintext highlighter-rouge">pr:47</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="inspector-flow">Inspector flow</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Inspector agent (or human) reviews the proof, then passes or fails</span>
+
+swarm inspect CLD-042 <span class="nt">--pass</span>
+swarm inspect CLD-042 <span class="nt">--pass</span> <span class="nt">--note</span> <span class="s2">"Tests pass, code reviewed, merging"</span>
+
+swarm inspect CLD-042 <span class="nt">--fail</span> <span class="nt">--reason</span> <span class="s2">"Edge case X not handled — see test_auth.py:142"</span>
+</code></pre></div></div>
+
+<p><strong>On <code class="language-plaintext highlighter-rouge">--pass</code>:</strong> the item is marked Done, the inspector’s agent ID is recorded in
+the trail, and the operation is signed in <code class="language-plaintext highlighter-rouge">trail.log</code>.</p>
+
+<p><strong>On <code class="language-plaintext highlighter-rouge">--fail</code>:</strong> the item is re-opened to <code class="language-plaintext highlighter-rouge">OPEN</code> state, <code class="language-plaintext highlighter-rouge">proof:</code> is cleared,
+<code class="language-plaintext highlighter-rouge">inspect_fails</code> is incremented, and a failure note is appended. The worker will see
+the item in <code class="language-plaintext highlighter-rouge">swarm ready</code> again and can re-claim it.</p>
+
+<h3 id="iteration-limit-and-escalation">Iteration limit and escalation</h3>
+
+<p>After <code class="language-plaintext highlighter-rouge">max_iterations</code> consecutive failures:</p>
+
+<ul>
+  <li>If the <strong>watchdog</strong> role is also enabled: a watchdog alert is printed and the item
+is flagged for human review.</li>
+  <li>If watchdog is <strong>not</strong> enabled: a plain warning is shown with the command to enable it.</li>
+</ul>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Watchdog alert: CLD-042 has failed inspection 3/3 times. Human review required.
+</code></pre></div></div>
+
+<h3 id="bypassing-human-override">Bypassing (human override)</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm <span class="k">done </span>CLD-042 <span class="nt">--force</span>    <span class="c"># skip inspector gate; for human directors only</span>
+</code></pre></div></div>
+
+<h3 id="how-the-proof-is-stored">How the proof is stored</h3>
+
+<p>The <code class="language-plaintext highlighter-rouge">proof:</code> and <code class="language-plaintext highlighter-rouge">inspect_fails:</code> fields are stored inline in <code class="language-plaintext highlighter-rouge">queue.md</code>, just like
+<code class="language-plaintext highlighter-rouge">priority:</code> and <code class="language-plaintext highlighter-rouge">notes:</code> — fully human-readable and git-diffable:</p>
+
+<div class="language-markdown highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">-</span> [&gt;] [CLD-042] [CLAIMED · worker-1 · 2026-04-18T10:00Z · PARTIAL] Implement OAuth2
+      priority: high | project: auth
+      proof: branch:feature/oauth2 commit:abc1234 tests:42/42
+      inspect_fails: 1
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="watchdog-built-in">Watchdog (built-in)</h2>
+
+<p>Watchdog escalation is now intrinsic to the inspector retry loop — <strong>no separate role
+agent is required</strong>. When an item’s <code class="language-plaintext highlighter-rouge">inspect_fails</code> reaches its effective retry limit,
+it is automatically set to <code class="language-plaintext highlighter-rouge">BLOCKED</code> with a clear reason. Blocked items surface
+immediately in <code class="language-plaintext highlighter-rouge">swarm audit</code>, <code class="language-plaintext highlighter-rouge">swarm status</code>, and <code class="language-plaintext highlighter-rouge">swarm heal</code>.</p>
+
+<p><strong>Retry limit precedence:</strong></p>
+
+<ol>
+  <li><strong>Task level</strong> — <code class="language-plaintext highlighter-rouge">max_retries:</code> field on the queue item (set via <code class="language-plaintext highlighter-rouge">swarm add --max-retries N</code>)</li>
+  <li><strong>Role level</strong> — <code class="language-plaintext highlighter-rouge">max_iterations</code> in <code class="language-plaintext highlighter-rouge">.swarm/roles/inspector.json</code> (set via <code class="language-plaintext highlighter-rouge">swarm role enable inspector --max-iterations N</code>)</li>
+  <li><strong>Default</strong> — 3</li>
+</ol>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Task-level override (this item gets 5 tries, not the role default)</span>
+swarm add <span class="s2">"Implement OAuth2"</span> <span class="nt">--max-retries</span> 5
+
+<span class="c"># Role-level default</span>
+swarm role <span class="nb">enable </span>inspector <span class="nt">--max-iterations</span> 3
+</code></pre></div></div>
+
+<p>When exhausted:</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Max retries exhausted: [SWC-042] is now BLOCKED (3/3 fails).
+  Use 'swarm unblock --reclaim' to manually reassign, or 'swarm done --force' to override.
+</code></pre></div></div>
+
+<p>To run a <strong>live watchdog monitoring window</strong> (optional):</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm spawn <span class="nt">--role</span> watchdog    <span class="c"># opens a tmux window running swarm audit --full in a loop</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="supervisor">Supervisor</h2>
+
+<p>The supervisor provides a holistic view across all active items and phases. Launch
+one as a named tmux window using <code class="language-plaintext highlighter-rouge">swarm spawn</code>:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm spawn <span class="nt">--role</span> supervisor    <span class="c"># opens tmux window with SWARM_ROLE=supervisor set</span>
+</code></pre></div></div>
+
+<p>Inside the supervisor window the agent has access to all <code class="language-plaintext highlighter-rouge">swarm</code> commands. Useful
+starting points:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm explore <span class="nt">--depth</span> 3    <span class="c"># colony heartbeat across all divisions</span>
+swarm report <span class="nt">--only</span> active <span class="c"># active items only, all divisions</span>
+swarm audit <span class="nt">--full</span>         <span class="c"># full health pass</span>
+</code></pre></div></div>
+
+<p><strong>Roadmap:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">swarm supervisor brief --format md</code> — structured progress brief for a human director</li>
+  <li>Hierarchy roll-up via <code class="language-plaintext highlighter-rouge">swarm ascend / descend</code></li>
+</ul>
+
+<hr />
+
+<h2 id="librarian-built-in-via-swarm-crawl">Librarian (built-in via <code class="language-plaintext highlighter-rouge">swarm crawl</code>)</h2>
+
+<p>Directory cataloging is now a first-class command rather than a role agent:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm crawl                   <span class="c"># catalog directory tree → context.md</span>
+swarm crawl <span class="nt">--create-items</span>    <span class="c"># also create queue items for undocumented dirs</span>
+swarm heal                    <span class="c"># verify alignment after crawl</span>
+</code></pre></div></div>
+
+<p>See <a href="CLI_REFERENCE.md#swarm-crawl">CLI Reference → swarm crawl</a> for full options.</p>
+
+<p>To run a <strong>live librarian window</strong> that monitors a directory for new uncatalogued
+content:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm spawn <span class="nt">--role</span> watchdog    <span class="c"># reuse watchdog window for periodic crawl + heal</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="role-interaction-map">Role Interaction Map</h2>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Worker agent  (swarm spawn SWC-042 --agent opencode)
+    │
+    ├── swarm claim &lt;id&gt;
+    ├── ... do work ...
+    └── swarm partial &lt;id&gt; --proof "branch:X commit:Y tests:N/N"
+                │
+                ▼
+        Inspector agent  (swarm spawn --role inspector)
+            │
+            ├── swarm inspect &lt;id&gt; --pass
+            │       └──► DONE  (signed in trail.log)
+            │
+            └── swarm inspect &lt;id&gt; --fail --reason "..."
+                        └──► re-OPEN  (inspect_fails++)
+                                │
+                                │  (if inspect_fails &gt;= effective max_retries)
+                                ▼
+                        BLOCKED  ←── automatic, no external agent needed
+                        (surfaces in swarm audit / swarm status)
+                                │
+                                ▼
+                    human: swarm unblock --reclaim
+                        or: swarm done --force
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="comparison-with-gastown-roles">Comparison with Gastown Roles</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>dot_swarm</th>
+      <th>Gastown</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>inspector</td>
+      <td>Witness (partial)</td>
+      <td>dot_swarm inspector actively gates done; Witness only monitors health</td>
+    </tr>
+    <tr>
+      <td><em>(auto-block on retries)</em></td>
+      <td>—</td>
+      <td>Watchdog escalation is intrinsic; no separate role agent</td>
+    </tr>
+    <tr>
+      <td>supervisor</td>
+      <td>Mayor (partial)</td>
+      <td>Mayor orchestrates; supervisor observes and reports</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">swarm crawl</code></td>
+      <td>—</td>
+      <td>Librarian function is a built-in command, not a role</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">swarm spawn</code></td>
+      <td>Colony bootstrap</td>
+      <td>Gastown has fixed colony setup; dot_swarm spawns on demand</td>
+    </tr>
+    <tr>
+      <td><em>(worker)</em></td>
+      <td>Polecats</td>
+      <td>Ephemeral workers; any agent with <code class="language-plaintext highlighter-rouge">$SWARM_AGENT_ID</code></td>
+    </tr>
+    <tr>
+      <td><em>(merge gate)</em></td>
+      <td>Refinery</td>
+      <td>SWC-024 roadmap item</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>dot_swarm roles are <strong>advisory and toggleable</strong> — you enable only what your workflow
+needs. Gastown’s roles are baked into the fixed colony architecture.</p>

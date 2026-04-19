@@ -1,0 +1,290 @@
+<h1 id="credits--inspirations">Credits &amp; Inspirations</h1>
+
+<p>dot_swarm stands on the shoulders of decades of research into how complex,
+coordinated behavior emerges from simple local interactions — no central
+command required.</p>
+
+<hr />
+
+<h2 id="primary-inspiration">Primary Inspiration</h2>
+
+<h3 id="steve-yegge--welcome-to-gas-town">Steve Yegge — “Welcome to Gas Town”</h3>
+
+<blockquote>
+  <p><em>“I’m running 20-30 Claude Code agents simultaneously, every day…
+The trick is nondeterministic idempotence.”</em></p>
+</blockquote>
+
+<p>Steve Yegge’s January 2026 essay
+<a href="https://steve-yegge.medium.com/welcome-to-gas-town-4f25ee16dd04">“Welcome to Gas Town”</a>
+is the direct inspiration for dot_swarm’s design philosophy. The essay
+describes coordinating large fleets of Claude Code agents across a real
+software organization — naming the challenge of making agent work
+<strong>idempotent under nondeterminism</strong>, and introducing the notion of
+<strong>MEOW (Molecular Expression of Work)</strong> as the unit of agent-driven
+progress.</p>
+
+<p>dot_swarm’s <code class="language-plaintext highlighter-rouge">.swarm/</code> directory, <code class="language-plaintext highlighter-rouge">queue.md</code> lifecycle, and item-ID
+convention are a direct implementation of the patterns Yegge describes:
+small, claimable units of work that agents can pick up, checkpoint, and
+hand off without stepping on each other.</p>
+
+<hr />
+
+<h2 id="the-biological-argument">The Biological Argument</h2>
+
+<p>Central coordination is expensive. In the natural systems that inspired dot_swarm,
+it is avoided almost universally — and in the rare cases where a “central” figure
+exists, the burden of coordination is not placed on that figure at all.</p>
+
+<p>An ant or bee queen does not manage work. She does not assign tasks, resolve
+conflicts, or approve sub-team formation. She emits <strong>chemical markers</strong> —
+pheromone signals that encode colony state — and workers read those signals
+autonomously to decide what to do. The queen’s energy budget is not consumed by
+coordination overhead. Coordination is a property of the <strong>shared medium</strong>, not of
+any single agent.</p>
+
+<p>This design produces emergent capabilities no top-down architecture could replicate
+at the same cost:</p>
+
+<ul>
+  <li><strong>Hive splitting</strong> — when a colony grows beyond a threshold, a subset self-organises
+around a new queen without any central directive. Multi-master by default.</li>
+  <li><strong>Task-oriented sub-teams</strong> — foraging, defence, nursing, and construction teams
+form and dissolve based on pheromone gradient signals, not management assignments.</li>
+  <li><strong>Fault tolerance</strong> — loss of any individual, including the queen, does not
+immediately collapse coordination. The medium persists; workers re-orient.</li>
+</ul>
+
+<p>The single prerequisite for all of this: <strong>all members speak the same chemical
+language.</strong> Pheromone signals only work if every worker interprets them the same way.
+The protocol is the coordination.</p>
+
+<p>SwarmCity is a direct translation of this principle to software agent fleets. Models
+and tools that modify filesystem-native projects are better off leaving traces in their
+environment — readable by any subsequent agent — than reporting state to a central node
+around which complicated systems must be arranged to prevent bottlenecks and data loss
+from information overload. As long as agents speak the same language (follow
+<code class="language-plaintext highlighter-rouge">BOOTSTRAP.md</code>), coordination emerges from the files themselves.</p>
+
+<hr />
+
+<h2 id="scientific-foundations">Scientific Foundations</h2>
+
+<h3 id="stigmergy--indirect-coordination-via-environment">Stigmergy — Indirect Coordination via Environment</h3>
+
+<p>The <code class="language-plaintext highlighter-rouge">.swarm/state.md</code> “pheromone trail” pattern — where agents read
+and update shared environment state rather than communicating directly —
+is an instance of <strong>stigmergy</strong>, first described by French entomologist
+Pierre-Paul Grassé studying termite mound construction.</p>
+
+<h4 id="foundational-papers">Foundational Papers</h4>
+
+<p><strong>1. The original concept</strong></p>
+
+<blockquote>
+  <p>Grassé, P.-P. (1959). La reconstruction du nid et les coordinations
+interindividuelles chez <em>Bellicositermes natalensis</em> et <em>Cubitermes</em> sp.
+La théorie de la stigmergie: Essai d’interprétation du comportement des
+termites constructeurs. <em>Insectes Sociaux</em>, 6(1), 41–81.</p>
+</blockquote>
+
+<p>Grassé coined “stigmergy” (<em>stigma</em> = mark, <em>ergon</em> = work) to explain
+how termites build kilometre-scale mounds without a blueprint or
+foreman — each worker responds to traces left in the structure itself.
+<strong>Key insight</strong>: coordination arises from the environment, not from
+inter-agent messaging.</p>
+
+<hr />
+
+<p><strong>2. The bridge to artificial systems</strong></p>
+
+<blockquote>
+  <p>Theraulaz, G., &amp; Bonabeau, E. (1999). A brief history of stigmergy.
+<em>Artificial Life</em>, 5(2), 97–116.</p>
+</blockquote>
+
+<p>Traces stigmergy from Grassé’s termites through 40 years of ethology
+and into distributed AI, showing how the concept generalises from
+insects to any system where agents modify a shared medium and respond
+to those modifications.</p>
+
+<hr />
+
+<p><strong>3. The textbook</strong></p>
+
+<blockquote>
+  <p>Bonabeau, E., Dorigo, M., &amp; Theraulaz, G. (1999).
+<em>Swarm Intelligence: From Natural to Artificial Systems</em>.
+Oxford University Press.</p>
+</blockquote>
+
+<p>The definitive reference for swarm intelligence. Covers self-organisation,
+stigmergy, emergent problem solving, and their engineering applications.
+SwarmCity’s multi-division “colony” model maps directly to the
+decentralised swarms described here.</p>
+
+<hr />
+
+<p><strong>4. Ant Colony Optimisation</strong></p>
+
+<blockquote>
+  <p>Dorigo, M., Maniezzo, V., &amp; Colorni, A. (1996). Ant System:
+Optimization by a colony of cooperating agents.
+<em>IEEE Transactions on Systems, Man, and Cybernetics — Part B</em>,
+26(1), 29–41.</p>
+</blockquote>
+
+<p>The paper that showed ant pheromone trails could solve NP-hard routing
+problems. Directly inspired SwarmCity’s priority-weighted queue: items
+claimed often accumulate implicit “pheromone weight” through repeated
+attention.</p>
+
+<hr />
+
+<p><strong>5. Stigmergy in engineering</strong></p>
+
+<blockquote>
+  <p>Parunak, H. V. D. (1997). “Go to the ant”: Engineering principles
+from natural agent systems. <em>Annals of Operations Research</em>, 75, 69–101.</p>
+</blockquote>
+
+<p>One of the first papers to formally bridge stigmergy and software
+engineering, arguing that ants demonstrate scalable, fault-tolerant
+coordination principles directly applicable to distributed software
+systems. SwarmCity’s <code class="language-plaintext highlighter-rouge">.swarm/</code> shared-file model is a filesystem
+implementation of precisely this principle.</p>
+
+<hr />
+
+<h2 id="nature-collection">Nature Collection</h2>
+
+<p>The <a href="https://www.nature.com/collections/cgbgjbahac">Nature collection on Collective Behaviour in Animals</a>
+gathers modern research on how signal trails, pheromone gradients, and
+local interaction rules produce colony-level intelligence — the same
+phenomena SwarmCity adapts for software agent fleets.</p>
+
+<hr />
+
+<h2 id="protocol-engineering--federated-coordination">Protocol Engineering &amp; Federated Coordination</h2>
+
+<h3 id="ogp--open-gateway-protocol">OGP — Open Gateway Protocol</h3>
+
+<blockquote>
+  <p>Proctor, D. (2026). “Case Study: Building a Protocol in the Age of AI.”
+<em>Trilogy AI Substack</em>.
+https://trilogyai.substack.com/p/case-study-building-a-protocol-in</p>
+</blockquote>
+
+<p>David Proctor’s public post-mortem on building OGP — a federated inter-agent
+protocol — is one of the most concrete accounts of what goes wrong when
+<strong>identity, trust, and persistence assumptions are made incorrectly</strong> in a
+multi-agent system.</p>
+
+<p>Two threads from this work are directly foundational to dot_swarm:</p>
+
+<p><strong>1. Inter-agent identity and trust</strong></p>
+
+<p>OGP’s early design treated identity as a hostname:port pair — a mutable,
+network-layer address rather than a cryptographic fingerprint. This produced
+a class of bugs where peer identity silently shifted across restarts or
+network changes. The lesson, applied in <code class="language-plaintext highlighter-rouge">federation.py</code>:</p>
+
+<blockquote>
+  <p><em>“Identity is a fingerprint, never an address.”</em></p>
+</blockquote>
+
+<p>dot_swarm’s <code class="language-plaintext highlighter-rouge">doorman_check()</code> always resolves <code class="language-plaintext highlighter-rouge">from_fingerprint</code> from the
+stored <code class="language-plaintext highlighter-rouge">trusted_peers/</code> record — it never trusts the identity claimed in
+the message body itself. This is a direct application of the OGP post-mortem.</p>
+
+<p><strong>2. Security under adversarial conditions</strong></p>
+
+<p>The post-mortem surfaces a category of failure that is easy to miss when
+building in good faith: <strong>an attacker who controls the message body can
+impersonate any peer if the receiver trusts the sender’s own claim</strong>. This
+applies not only to federation but to any system that ingests external text —
+including LLM prompt contexts.</p>
+
+<p>This insight directly motivated dot_swarm’s <code class="language-plaintext highlighter-rouge">security.py</code> adversarial scanner:
+the same trust-the-claim failure mode that breaks cross-agent federation also
+enables prompt injection attacks (an adversarial “agent” claims authority it
+was not granted). The 18-pattern scanner, the three-layer doorman model, and
+the signed pheromone trail all address variants of this same root problem.</p>
+
+<p><strong>Relationship to dot_swarm’s design:</strong></p>
+
+<table>
+  <thead>
+    <tr>
+      <th>OGP lesson</th>
+      <th>dot_swarm implementation</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Identity = fingerprint, not address</td>
+      <td><code class="language-plaintext highlighter-rouge">identity.json</code> stores <code class="language-plaintext highlighter-rouge">fingerprint</code>; <code class="language-plaintext highlighter-rouge">trust_peer()</code> indexes on it</td>
+    </tr>
+    <tr>
+      <td>Persist before returning success</td>
+      <td><code class="language-plaintext highlighter-rouge">trust_peer()</code> calls <code class="language-plaintext highlighter-rouge">_atomic_write()</code> before <code class="language-plaintext highlighter-rouge">return</code></td>
+    </tr>
+    <tr>
+      <td>Never trust claimed sender ID</td>
+      <td><code class="language-plaintext highlighter-rouge">doorman_check()</code> looks up stored record — ignores <code class="language-plaintext highlighter-rouge">from_fingerprint</code> field in message</td>
+    </tr>
+    <tr>
+      <td>Layered scopes limit blast radius</td>
+      <td><code class="language-plaintext highlighter-rouge">policy.md</code> → <code class="language-plaintext highlighter-rouge">trusted_peers/&lt;fp&gt;.json</code> → runtime <code class="language-plaintext highlighter-rouge">doorman_check()</code></td>
+    </tr>
+    <tr>
+      <td>HMAC is wrong for cross-party signing</td>
+      <td>HMAC retained for local trail only; Ed25519 documented as upgrade path</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<h2 id="design-lineage">Design Lineage</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Biological concept</th>
+      <th>SwarmCity implementation</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Termite pheromone deposit</td>
+      <td><code class="language-plaintext highlighter-rouge">state.md</code> <strong>Current focus</strong> / <strong>Blockers</strong></td>
+    </tr>
+    <tr>
+      <td>Ant trail reinforcement</td>
+      <td>Item priority + reclaim count</td>
+    </tr>
+    <tr>
+      <td>Nest-site recruitment</td>
+      <td><code class="language-plaintext highlighter-rouge">swarm explore</code> / <code class="language-plaintext highlighter-rouge">swarm report</code> heartbeat</td>
+    </tr>
+    <tr>
+      <td>Division of labour</td>
+      <td>Per-division <code class="language-plaintext highlighter-rouge">.swarm/</code> isolation</td>
+    </tr>
+    <tr>
+      <td>Colony memory</td>
+      <td><code class="language-plaintext highlighter-rouge">memory.md</code> append-only log</td>
+    </tr>
+    <tr>
+      <td>Handoff signal</td>
+      <td><code class="language-plaintext highlighter-rouge">swarm handoff</code> structured note</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<p><em>If you have built something with SwarmCity, we’d love to hear about it.
+Open an issue or start a discussion on <a href="https://github.com/MikeHLee/SwarmCity">GitHub</a>.</em></p>

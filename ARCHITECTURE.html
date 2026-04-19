@@ -1,0 +1,1040 @@
+<h1 id="dot_swarm--implementation-bible">dot_swarm — Implementation Bible</h1>
+
+<p><strong>Version</strong>: 0.3.0
+<strong>Status</strong>: Phase 1 (operational)
+<strong>Last updated</strong>: 2026-03-30
+<strong>Author</strong>: human-ML + claude-code</p>
+
+<p>This document is the single source of truth for the dot_swarm project. It covers the
+full architecture, all conventions, the CLI and MCP tool designs, implementation phases,
+and handoff guides. Read this before starting any work on the tools.</p>
+
+<hr />
+
+<h2 id="table-of-contents">Table of Contents</h2>
+
+<ol>
+  <li><a href="#1-what-dot_swarm-is">What dot_swarm Is</a></li>
+  <li><a href="#2-relationship-to-gastown">Relationship to Gastown</a></li>
+  <li><a href="#3-core-concepts">Core Concepts</a></li>
+  <li><a href="#4-directory-structure">Directory Structure</a></li>
+  <li><a href="#5-file-formats-and-conventions">File Formats and Conventions</a></li>
+  <li><a href="#6-cross-platform-agent-bootstrapping">Cross-Platform Agent Bootstrapping</a></li>
+  <li><a href="#7-cli-tool-design">CLI Tool Design</a></li>
+  <li><a href="#8-mcp-tool-design">MCP Tool Design</a></li>
+  <li><a href="#9-git-topology">Git Topology</a></li>
+  <li><a href="#10-cicd-documentation-drift-check">CI/CD Documentation Drift Check</a></li>
+  <li><a href="#11-implementation-phases">Implementation Phases</a></li>
+  <li><a href="#12-session-handoff-guide">Session Handoff Guide</a></li>
+</ol>
+
+<hr />
+
+<h2 id="1-what-dot_swarm-is">1. What dot_swarm Is</h2>
+
+<p>dot_swarm is a <strong>minimal, git-native, markdown-first agent orchestration layer</strong> for
+multi-repo software organizations. It replaces heavyweight issue trackers and
+project management tools with a set of conventions, a small CLI, and an MCP server.</p>
+
+<p><strong>What it provides:</strong></p>
+<ul>
+  <li>Coordination state as plain markdown files in <code class="language-plaintext highlighter-rouge">.swarm/</code> directories</li>
+  <li>A stigmergic protocol agents follow to pick up, execute, and hand off work</li>
+  <li>A CLI tool for humans and CI systems to manage and audit the state</li>
+  <li>An MCP server agents can call to read/write state atomically</li>
+</ul>
+
+<p><strong>What it does not provide:</strong></p>
+<ul>
+  <li>A web UI (read the files directly)</li>
+  <li>A database (git history is the audit trail)</li>
+  <li>A message bus or event system (state.md is the gossip mechanism)</li>
+  <li>Enforcement (the protocol relies on agent discipline, backed by CI audit)</li>
+</ul>
+
+<p><strong>Design philosophy:</strong></p>
+<blockquote>
+  <p>The simplest system that makes agent handoffs reliable is the right system.
+Every agent on every platform should be able to orient in &lt; 60 seconds by reading
+three markdown files.</p>
+</blockquote>
+
+<hr />
+
+<h2 id="2-relationship-to-gastown">2. Relationship to Gastown</h2>
+
+<p><strong>Gastown</strong> is the name for the broader Oasis multi-agent orchestration vision —
+the concept of multiple AI agents and human developers working asynchronously across
+a repo ecosystem, with stigmergic coordination. Prior attempts used “Beads” (a Dolt-
+based issue tracker), which failed due to:</p>
+<ul>
+  <li>Git pollution from Dolt artifacts (PID, lock, log, credential files)</li>
+  <li>A second sync layer on top of git</li>
+  <li>Non-standard vocabulary</li>
+  <li>Binary state that agents couldn’t read directly</li>
+</ul>
+
+<p><strong>dot_swarm</strong> is the first reference implementation of the Gastown architecture that’s
+worth keeping. It reuses Gastown concepts (pheromone trails, claim patterns, hierarchical
+coordinators) but implements them purely in markdown + git.</p>
+
+<p>Gastown continues as the conceptual umbrella. Future implementations (with schedulers,
+UIs, or event buses) would be “Gastown architectures.” dot_swarm is the minimal baseline.</p>
+
+<hr />
+
+<h2 id="3-core-concepts">3. Core Concepts</h2>
+
+<h3 id="organization--division--future-team">Organization / Division / (future: Team)</h3>
+
+<pre><code class="language-mermaid">graph TD
+    Colony[Organization: oasis-x] --&gt; Node1[Division: oasis-cloud]
+    Colony --&gt; Node2[Division: oasis-firmware]
+    Colony --&gt; Node3[Division: swarm-city]
+    
+    subgraph "State Layer (.swarm/)"
+      Node1 --&gt; S1[state.md]
+      Node1 --&gt; Q1[queue.md]
+    end
+</code></pre>
+
+<p>There is intentionally no “team” level in Phase 0. If a product family needs its own
+coordinator (e.g., all cloud-related repos), add a <code class="language-plaintext highlighter-rouge">towns/&lt;family&gt;/</code> subdirectory
+inside org <code class="language-plaintext highlighter-rouge">.swarm/</code>. Do not add this until there is a real need.</p>
+
+<h3 id="the-pheromone-trail-statemd">The Pheromone Trail (state.md)</h3>
+
+<p>Borrowed from ant colony optimization: agents leave chemical traces (state.md updates)
+that guide successor agents. <code class="language-plaintext highlighter-rouge">state.md</code> is always short (&lt; 20 lines), always current,
+and always the first thing an agent reads after <code class="language-plaintext highlighter-rouge">context.md</code>. It decays if not updated —
+the CI audit detects this “drift.”</p>
+
+<h3 id="stigmergic-coordination">Stigmergic Coordination</h3>
+
+<p>Agents do not communicate directly. They communicate through shared state (the <code class="language-plaintext highlighter-rouge">.swarm/</code>
+files). This means:</p>
+<ul>
+  <li>Multiple agents can be active in different divisions simultaneously</li>
+  <li>No central dispatcher is required</li>
+  <li>A new agent can orient fully from the filesystem, without talking to any service</li>
+</ul>
+
+<pre><code class="language-mermaid">sequenceDiagram
+    participant Agent A
+    participant Filesystem (.swarm/)
+    participant Agent B
+
+    Agent A-&gt;&gt;Filesystem: Claim Item (update queue.md)
+    Agent A-&gt;&gt;Filesystem: Set Focus (update state.md)
+    Agent A-&gt;&gt;Agent A: Work on Task...
+    Agent A-&gt;&gt;Filesystem: Mark Done (update queue.md)
+    Agent A-&gt;&gt;Filesystem: Set Handoff Note (update state.md)
+    
+    Note over Agent B: Session Starts
+    Agent B-&gt;&gt;Filesystem: Read state.md (Handoff)
+    Agent B-&gt;&gt;Filesystem: Read queue.md (Next Item)
+</code></pre>
+
+<h3 id="the-claim-pattern">The Claim Pattern</h3>
+
+<p>Work items use inline stamps rather than a separate lock database:</p>
+
+<pre><code class="language-mermaid">stateDiagram-v2
+    [*] --&gt; OPEN: swarm add
+    OPEN --&gt; CLAIMED: swarm claim
+    CLAIMED --&gt; PARTIAL: swarm partial
+    PARTIAL --&gt; CLAIMED: swarm claim
+    CLAIMED --&gt; BLOCKED: swarm block
+    BLOCKED --&gt; OPEN: swarm (manual/AI)
+    CLAIMED --&gt; DONE: swarm done
+    DONE --&gt; [*]
+</code></pre>
+
+<p><code class="language-plaintext highlighter-rouge">[OPEN] → [CLAIMED · claude-code · 2026-03-26T14:30Z] → [DONE · 2026-03-26T16:45Z]</code></p>
+
+<hr />
+
+<h2 id="4-directory-structure">4. Directory Structure</h2>
+
+<h3 id="org-level">Org Level</h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>oasis-x/
+├── .swarm/
+│   ├── BOOTSTRAP.md         # Universal agent protocol (read this first)
+│   ├── ROUTING.md           # Level attribution decision tree
+│   ├── GLOSSARY.md          # Terminology reference
+│   ├── context.md           # Org charter (stable)
+│   ├── state.md             # Current org focus (volatile)
+│   ├── queue.md             # Org-level work items
+│   ├── memory.md            # Org-level decisions + rationale
+│   └── workflows/
+│       ├── agent-session.md # Standard agent session protocol
+│       ├── new-feature.md   # Feature development workflow
+│       ├── bug-fix.md       # Bug fix workflow
+│       └── cross-division.md# Cross-division coordination
+├── swarm-city/              # This project (CLI + MCP source)
+│   ├── README.md            # This file (the bible)
+│   ├── cli/                 # SwarmCity CLI tool
+│   ├── mcp/                 # SwarmCity MCP server
+│   └── docs/                # Additional documentation
+└── AGENTS.md                # Updated to point at .swarm/BOOTSTRAP.md
+</code></pre></div></div>
+
+<h3 id="division-level-each-git-repo">Division Level (each git repo)</h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>oasis-cloud/
+├── .swarm/
+│   ├── BOOTSTRAP.md         # Symlink or copy of org BOOTSTRAP (or one-liner pointer)
+│   ├── context.md           # This division's charter
+│   ├── state.md             # This division's current state
+│   ├── queue.md             # This division's work items
+│   └── memory.md            # This division's decisions
+├── CLAUDE.md                # One-liner: "See @.swarm/BOOTSTRAP.md"
+├── .windsurfrules           # One-liner pointing to .swarm/BOOTSTRAP.md
+└── .cursorrules             # One-liner pointing to .swarm/BOOTSTRAP.md
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="5-file-formats-and-conventions">5. File Formats and Conventions</h2>
+
+<h3 id="item-id-format">Item ID Format</h3>
+
+<p><code class="language-plaintext highlighter-rouge">&lt;DIVISION-CODE&gt;-&lt;zero-padded-3-digit-number&gt;</code></p>
+
+<p>Examples: <code class="language-plaintext highlighter-rouge">ORG-001</code>, <code class="language-plaintext highlighter-rouge">CLD-042</code>, <code class="language-plaintext highlighter-rouge">SWC-007</code></p>
+
+<p>IDs are assigned sequentially within each division and never reused. The CLI’s
+<code class="language-plaintext highlighter-rouge">swarm add</code> command auto-assigns the next available ID.</p>
+
+<p>Division codes are defined in <code class="language-plaintext highlighter-rouge">.swarm/BOOTSTRAP.md</code> and <code class="language-plaintext highlighter-rouge">GLOSSARY.md</code>.</p>
+
+<h3 id="queuemd-structure">queue.md Structure</h3>
+
+<div class="language-markdown highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="gh"># Queue — &lt;division&gt; (&lt;level&gt;)</span>
+
+<span class="gu">## Active</span>
+<span class="p">-</span> [&gt;] [<span class="nt">&lt;ID&gt;</span>] [CLAIMED · <span class="nt">&lt;agent&gt;</span> · <span class="nt">&lt;ISO8601&gt;</span>] <span class="nt">&lt;description&gt;</span>
+      priority: <span class="nt">&lt;critical</span><span class="err">|</span><span class="na">high</span><span class="err">|</span><span class="na">medium</span><span class="err">|</span><span class="na">low</span><span class="nt">&gt;</span> | project: <span class="nt">&lt;project-name&gt;</span>
+      [notes: <span class="nt">&lt;optional</span> <span class="na">notes</span><span class="nt">&gt;</span>]
+      [depends: <span class="nt">&lt;ID&gt;</span>, <span class="nt">&lt;ID&gt;</span>]
+      [refs: <span class="nt">&lt;path&gt;</span>#<span class="nt">&lt;ID&gt;</span>]
+
+<span class="gu">## Pending</span>
+<span class="p">-</span> [ ] [<span class="nt">&lt;ID&gt;</span>] [OPEN] <span class="nt">&lt;description&gt;</span>
+      priority: <span class="nt">&lt;</span><span class="err">...</span><span class="nt">&gt;</span> | project: <span class="nt">&lt;</span><span class="err">...</span><span class="nt">&gt;</span>
+
+<span class="gu">## Done</span>
+<span class="p">-</span> [x] [<span class="nt">&lt;ID&gt;</span>] [DONE · <span class="nt">&lt;ISO8601&gt;</span>] <span class="nt">&lt;description&gt;</span>
+      project: <span class="nt">&lt;</span><span class="err">...</span><span class="nt">&gt;</span>
+</code></pre></div></div>
+
+<p>Rules:</p>
+<ul>
+  <li>Items in Active have been claimed (move here from Pending when claimed)</li>
+  <li>Items in Pending are OPEN and sorted by priority</li>
+  <li>Items in Done are kept for history (never deleted)</li>
+  <li>Use <code class="language-plaintext highlighter-rouge">[&gt;]</code> checkbox syntax for active items (visual indicator)</li>
+  <li>The <code class="language-plaintext highlighter-rouge">priority</code> and <code class="language-plaintext highlighter-rouge">project</code> fields are machine-readable — the CLI parses them</li>
+</ul>
+
+<h3 id="statemd-structure">state.md Structure</h3>
+
+<div class="language-markdown highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="gh"># State — &lt;division&gt;</span>
+
+<span class="gs">**Last touched**</span>: <span class="nt">&lt;ISO8601&gt;</span> by <span class="nt">&lt;agent-id&gt;</span>
+<span class="gs">**Current focus**</span>: <span class="nt">&lt;one-line</span> <span class="na">description</span><span class="nt">&gt;</span>
+<span class="gs">**Active items**</span>: <span class="nt">&lt;ID&gt;</span>, <span class="nt">&lt;ID&gt;</span>
+<span class="gs">**Blockers**</span>: <span class="nt">&lt;None</span> <span class="err">|</span> <span class="na">description</span><span class="nt">&gt;</span>
+<span class="gs">**Ready for pickup**</span>: <span class="nt">&lt;ID&gt;</span>, <span class="nt">&lt;ID&gt;</span>
+<span class="p">
+---
+</span>
+<span class="gu">## Handoff Note</span>
+
+<span class="nt">&lt;</span><span class="err">1</span><span class="na">-3</span> <span class="na">sentences</span> <span class="na">for</span> <span class="na">the</span> <span class="na">next</span> <span class="na">agent</span><span class="nt">&gt;</span>
+<span class="p">
+---
+</span>
+<span class="gu">## Division State Snapshot (org only)</span>
+
+| Division | State file | Last known focus |
+...
+</code></pre></div></div>
+
+<h3 id="contextmd-structure">context.md Structure</h3>
+
+<div class="language-markdown highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="gh"># Context — &lt;division&gt;</span>
+
+<span class="gs">**Level**</span>: <span class="nt">&lt;Organization</span> <span class="err">|</span> <span class="na">Division</span><span class="nt">&gt;</span>
+<span class="gs">**Coordinator path**</span>: <span class="nt">&lt;relative</span> <span class="na">path</span> <span class="na">to</span> <span class="err">.</span><span class="na">swarm</span><span class="nt">/&gt;</span>
+<span class="gs">**Last updated**</span>: <span class="nt">&lt;YYYY-MM-DD&gt;</span>
+
+<span class="gu">## What &lt;division&gt; Is</span>
+<span class="nt">&lt;paragraph&gt;</span>
+
+<span class="gu">## Architecture Constraints</span>
+<span class="nt">&lt;numbered</span> <span class="na">list</span><span class="nt">&gt;</span>
+
+<span class="gu">## Current Focus Areas</span>
+<span class="nt">&lt;numbered</span> <span class="na">list</span><span class="nt">&gt;</span>
+
+<span class="gu">## Key Reference Documents</span>
+<span class="nt">&lt;list</span> <span class="na">with</span> <span class="na">paths</span><span class="nt">&gt;</span>
+</code></pre></div></div>
+
+<h3 id="memorymd-structure">memory.md Structure</h3>
+
+<div class="language-markdown highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="gh"># Memory — &lt;division&gt;</span>
+
+<span class="gu">## &lt;YYYY-MM-DD&gt; — &lt;topic&gt; (&lt;agent-id&gt;)</span>
+
+<span class="gs">**Decision**</span>: <span class="nt">&lt;what</span> <span class="na">was</span> <span class="na">decided</span><span class="nt">&gt;</span>
+<span class="gs">**Why**</span>: <span class="nt">&lt;rationale&gt;</span>
+<span class="gs">**Trade-off accepted**</span>: <span class="nt">&lt;what</span> <span class="na">was</span> <span class="na">given</span> <span class="na">up</span><span class="nt">&gt;</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="6-cross-platform-agent-bootstrapping">6. Cross-Platform Agent Bootstrapping</h2>
+
+<h3 id="the-problem">The Problem</h3>
+
+<p>Every agent platform loads a different “magic file”:</p>
+<ul>
+  <li>Claude Code: <code class="language-plaintext highlighter-rouge">CLAUDE.md</code></li>
+  <li>Windsurf: <code class="language-plaintext highlighter-rouge">.windsurfrules</code></li>
+  <li>Cursor: <code class="language-plaintext highlighter-rouge">.cursorrules</code></li>
+  <li>Gemini CLI: system prompt config</li>
+  <li>OpenCode: agent rules file</li>
+</ul>
+
+<p>Maintaining divergent protocols in each leads to drift.</p>
+
+<h3 id="the-solution">The Solution</h3>
+
+<p><strong>Single canonical source (<code class="language-plaintext highlighter-rouge">BOOTSTRAP.md</code>) + thin platform shims.</strong></p>
+
+<p>Each platform shim is a one-liner that points agents at <code class="language-plaintext highlighter-rouge">.swarm/BOOTSTRAP.md</code>. When the
+protocol changes, only <code class="language-plaintext highlighter-rouge">BOOTSTRAP.md</code> needs updating.</p>
+
+<h3 id="platform-shim-templates">Platform Shim Templates</h3>
+
+<p>See <code class="language-plaintext highlighter-rouge">docs/PLATFORM_SETUP.md</code> for copy-paste templates. Quick reference:</p>
+
+<p><strong>CLAUDE.md</strong> (Claude Code):</p>
+<div class="language-markdown highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Before starting any work, read @.swarm/BOOTSTRAP.md and follow the protocol exactly.
+Active context: @.swarm/context.md | State: @.swarm/state.md | Queue: @.swarm/queue.md
+</code></pre></div></div>
+
+<p><strong>.windsurfrules</strong> (Windsurf):</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Before starting any task, read the file .swarm/BOOTSTRAP.md and follow its protocol.
+Do not begin work without claiming an item in .swarm/queue.md and updating .swarm/state.md.
+</code></pre></div></div>
+
+<p><strong>.cursorrules</strong> (Cursor):</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Always begin every session by reading .swarm/BOOTSTRAP.md.
+Follow the On Start, During Work, and On Stop sections exactly.
+</code></pre></div></div>
+
+<p><strong>Gemini CLI / OpenCode</strong> — these require configuring a system prompt fragment.
+Copy the full text of <code class="language-plaintext highlighter-rouge">BOOTSTRAP.md</code> into the platform’s system prompt config,
+or add a file-read instruction pointing at <code class="language-plaintext highlighter-rouge">.swarm/BOOTSTRAP.md</code>.</p>
+
+<h3 id="division-level-bootstrapmd">Division-Level BOOTSTRAP.md</h3>
+
+<p>Each division’s <code class="language-plaintext highlighter-rouge">.swarm/BOOTSTRAP.md</code> can either be:</p>
+<ol>
+  <li>A copy of the org-level BOOTSTRAP.md (simplest — run <code class="language-plaintext highlighter-rouge">swarm init</code> to create)</li>
+  <li>A one-liner pointer: <code class="language-plaintext highlighter-rouge">See oasis-x/.swarm/BOOTSTRAP.md for the full protocol.</code></li>
+  <li>A division-specific variant (for divisions with unusual workflows)</li>
+</ol>
+
+<p>Option 2 is preferred during Phase 0. The CLI’s <code class="language-plaintext highlighter-rouge">swarm init</code> creates option 2 by default.</p>
+
+<hr />
+
+<h2 id="7-cli-tool-design">7. CLI Tool Design</h2>
+
+<h3 id="overview">Overview</h3>
+
+<p>The <code class="language-plaintext highlighter-rouge">swarm</code> CLI is a Python tool installed into the local Python environment or as a
+global binary. It manages <code class="language-plaintext highlighter-rouge">.swarm/</code> files, enforces conventions, and provides audit
+capabilities.</p>
+
+<p><strong>Language</strong>: Python 3.11+
+<strong>Framework</strong>: Click (consistent with existing oasis tooling)
+<strong>Location</strong>: <code class="language-plaintext highlighter-rouge">src/swarm_city/</code>
+<strong>Install</strong>: <code class="language-plaintext highlighter-rouge">pip install -e .</code></p>
+
+<h3 id="command-reference">Command Reference</h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm [OPTIONS] COMMAND [ARGS]
+
+Options:
+  --level TEXT    Override level detection (org|div)
+  --path TEXT     Path to operate on (default: cwd)
+  --format TEXT   Output format (table|json|md) default: table
+  -v, --verbose   Verbose output
+
+Commands:
+  init      Initialize .swarm/ in current directory
+  status    Show current state (summary across all divisions or current div)
+  claim     Claim a work item
+  done      Mark a work item as done
+  add       Add a new work item
+  partial   Mark a claimed item as partially complete (safe for re-claim)
+  block     Mark a work item as blocked with a reason
+  audit     Check for drift: stale claims, missing state updates, orphaned refs
+  ls        List work items with optional filters
+  handoff   Generate a handoff summary (current state + next ready items)
+  sync      Refresh state snapshot in org state.md from all division state files
+  explore   Show the heartbeat of all divisions in the colony
+  ai        Natural language interface (configurable context limit)
+  history   Show git log filtered to .swarm/ changes
+</code></pre></div></div>
+
+<h3 id="command-specs">Command Specs</h3>
+
+<h4 id="swarm-explore"><code class="language-plaintext highlighter-rouge">swarm explore</code></h4>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm explore [--depth 2] [--path .]
+</code></pre></div></div>
+
+<p>Recursively discovers all <code class="language-plaintext highlighter-rouge">.swarm/</code> directories in the subtree and displays a unified
+“Colony Heartbeat” table. This is the primary human-facing discovery tool for
+multi-repo organizations.</p>
+
+<p>Output:</p>
+<ul>
+  <li>Division name (with ★ for org level)</li>
+  <li>Last touched (timestamp)</li>
+  <li>Current focus</li>
+  <li>Activity summary (number of active/pending items)</li>
+</ul>
+
+<h4 id="swarm-ai"><code class="language-plaintext highlighter-rouge">swarm ai</code></h4>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm ai "instruction" [--limit 1200] [--yes]
+</code></pre></div></div>
+
+<p>Translates natural language into atomic <code class="language-plaintext highlighter-rouge">.swarm/</code> file operations.</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">--limit</code>: Adjust the approximate token limit for the context bundle. High limits (e.g., 6000) allow the AI to see more of the queue and context, but increase cost/latency. Default is 1200.</li>
+</ul>
+
+<hr />
+
+<h2 id="8-visualization-strategy-the-stigmergic-heartbeat">8. Visualization Strategy: The Stigmergic Heartbeat</h2>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm status [--division DIV-CODE] [--all]
+</code></pre></div></div>
+
+<p>At org level: table of all divisions with their current state.md summary.
+At div level: current state.md + next 3 OPEN items from queue.md.
+<code class="language-plaintext highlighter-rouge">--all</code>: full queue.md dump.</p>
+
+<p>Output example:</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Organization: oasis-x | Updated: 2026-03-26T00:00Z by human-ML
+Focus: SwarmCity bootstrap — scaffolding .swarm/ structure
+
+Division     Last Touched              Focus
+──────────── ──────────────────────── ────────────────────────────────
+oasis-cloud  2026-03-25T10:00Z        Not yet bootstrapped (Phase 1 pending)
+oasis-fw     2026-03-24T18:00Z        Not yet bootstrapped (Phase 1 pending)
+swarm-city   2026-03-26T00:00Z        Phase 0 scaffolding active
+
+Pending (org): ORG-002 (CLI tool), ORG-003 (MCP server), ORG-004 (div stubs)
+</code></pre></div></div>
+
+<h4 id="swarm-claim-id"><code class="language-plaintext highlighter-rouge">swarm claim &lt;id&gt;</code></h4>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm claim ORG-002 [--agent claude-code] [--path .]
+</code></pre></div></div>
+
+<ul>
+  <li>Reads <code class="language-plaintext highlighter-rouge">queue.md</code>, finds the item by ID</li>
+  <li>Changes <code class="language-plaintext highlighter-rouge">[OPEN]</code> → <code class="language-plaintext highlighter-rouge">[CLAIMED · &lt;agent&gt; · &lt;ISO8601&gt;]</code></li>
+  <li>Moves item to Active section</li>
+  <li>Updates <code class="language-plaintext highlighter-rouge">state.md</code> Current focus field</li>
+  <li>Prints confirmation</li>
+</ul>
+
+<p>Agent ID defaults to:</p>
+<ol>
+  <li><code class="language-plaintext highlighter-rouge">$SWARM_AGENT_ID</code> env var</li>
+  <li><code class="language-plaintext highlighter-rouge">$USER</code> with <code class="language-plaintext highlighter-rouge">human-</code> prefix</li>
+  <li>Prompted interactively</li>
+</ol>
+
+<h4 id="swarm-done-id"><code class="language-plaintext highlighter-rouge">swarm done &lt;id&gt;</code></h4>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm done ORG-002 [--note "brief completion note"]
+</code></pre></div></div>
+
+<ul>
+  <li>Changes <code class="language-plaintext highlighter-rouge">[CLAIMED ...]</code> → <code class="language-plaintext highlighter-rouge">[DONE · &lt;ISO8601&gt;]</code></li>
+  <li>Moves item to Done section</li>
+  <li>Updates <code class="language-plaintext highlighter-rouge">state.md</code> (clears item from Active items, sets Handoff note)</li>
+  <li>Prompts: “What’s the next item to highlight in state.md?”</li>
+</ul>
+
+<h4 id="swarm-add-description"><code class="language-plaintext highlighter-rouge">swarm add "&lt;description&gt;"</code></h4>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm add "Fix Redis timeout in sentinel" [--priority high] [--project cloud-stability] [--refs ORG-009]
+</code></pre></div></div>
+
+<ul>
+  <li>Auto-assigns next available ID for current division (reads last ID from queue.md)</li>
+  <li>Appends to Pending section in correct priority order</li>
+  <li>Prints assigned ID</li>
+</ul>
+
+<h4 id="swarm-audit"><code class="language-plaintext highlighter-rouge">swarm audit</code></h4>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm audit [--all] [--since 48h]
+</code></pre></div></div>
+
+<p>Checks:</p>
+<ol>
+  <li><strong>Stale claims</strong>: Items <code class="language-plaintext highlighter-rouge">[CLAIMED]</code> for &gt; 48h without a state.md update → warns</li>
+  <li><strong>Drift</strong>: <code class="language-plaintext highlighter-rouge">state.md</code> Last touched &gt; 72h ago in any division → warns</li>
+  <li><strong>Orphaned refs</strong>: <code class="language-plaintext highlighter-rouge">refs:</code> pointers in queue items that point to non-existent IDs</li>
+  <li><strong>Unclaimed blockers</strong>: <code class="language-plaintext highlighter-rouge">[BLOCKED]</code> items with no human acknowledgment &gt; 24h</li>
+</ol>
+
+<p>Output: table of issues with severity (WARN / ERROR) and suggested action.</p>
+
+<h4 id="swarm-handoff"><code class="language-plaintext highlighter-rouge">swarm handoff</code></h4>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm handoff [--format md|text]
+</code></pre></div></div>
+
+<p>Generates a handoff document suitable for pasting into a new agent chat:</p>
+
+<div class="language-markdown highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="gh"># SwarmCity Handoff — oasis-x — 2026-03-26T14:30Z</span>
+
+<span class="gu">## Current State</span>
+Focus: SwarmCity Phase 0 scaffolding
+Agent: human-ML
+Active: ORG-001 (in progress — .swarm/ files being created)
+
+<span class="gu">## Ready for Pickup</span>
+<span class="p">-</span> ORG-002: Implement SwarmCity CLI tool [HIGH]
+<span class="p">-</span> ORG-003: Implement SwarmCity MCP server [HIGH]
+<span class="p">-</span> ORG-004: Create division-level .swarm/ stubs [HIGH]
+
+<span class="gu">## Context Files to Load</span>
+<span class="p">-</span> @oasis-x/.swarm/BOOTSTRAP.md
+<span class="p">-</span> @oasis-x/.swarm/context.md
+<span class="p">-</span> @oasis-x/swarm-city/README.md (full implementation bible)
+</code></pre></div></div>
+
+<h4 id="swarm-sync"><code class="language-plaintext highlighter-rouge">swarm sync</code></h4>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm sync [--dry-run]
+</code></pre></div></div>
+
+<p>Reads <code class="language-plaintext highlighter-rouge">state.md</code> from each known division and refreshes the Division State Snapshot
+table in org <code class="language-plaintext highlighter-rouge">state.md</code>. Run this after multiple divisions have been updated.</p>
+
+<p>Detects division paths from <code class="language-plaintext highlighter-rouge">context.md</code>’s Active Divisions table.</p>
+
+<h3 id="implementation-notes">Implementation Notes</h3>
+
+<ul>
+  <li><strong>Atomic writes</strong>: All queue.md edits use write-to-tmp + rename to avoid partial writes</li>
+  <li><strong>ID parsing</strong>: Use regex <code class="language-plaintext highlighter-rouge">\[([A-Z]+-\d+)\]</code> to find item IDs in queue.md</li>
+  <li><strong>Timestamp</strong>: Always ISO 8601 UTC with Z suffix: <code class="language-plaintext highlighter-rouge">datetime.utcnow().strftime('%Y-%m-%dT%H:%MZ')</code></li>
+  <li><strong>Section detection</strong>: Parse queue.md sections by <code class="language-plaintext highlighter-rouge">## Active</code>, <code class="language-plaintext highlighter-rouge">## Pending</code>, <code class="language-plaintext highlighter-rouge">## Done</code> headers</li>
+  <li><strong>No external dependencies</strong> besides Click and standard library (for portability)</li>
+</ul>
+
+<hr />
+
+<h2 id="8-mcp-tool-design">8. MCP Tool Design</h2>
+
+<h3 id="overview-1">Overview</h3>
+
+<p>The SwarmCity MCP server exposes all <code class="language-plaintext highlighter-rouge">.swarm/</code> operations as tools that any MCP-
+compatible agent platform can call. This is the preferred way for agents to interact
+with SwarmCity when an MCP connection is available — it handles atomic writes and
+provides structured responses.</p>
+
+<p><strong>Language</strong>: Python 3.11+
+<strong>Framework</strong>: <code class="language-plaintext highlighter-rouge">mcp</code> (Model Context Protocol Python SDK)
+<strong>Transport</strong>: stdio (default) or SSE
+<strong>Location</strong>: <code class="language-plaintext highlighter-rouge">src/swarm_city_mcp/</code>
+<strong>Install</strong>: <code class="language-plaintext highlighter-rouge">pip install -e .</code></p>
+
+<h3 id="configuration-per-platform">Configuration (per platform)</h3>
+
+<p><strong>Claude Code</strong> (<code class="language-plaintext highlighter-rouge">~/.claude/settings.json</code> or project settings):</p>
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"mcpServers"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="nl">"swarm-city"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+      </span><span class="nl">"command"</span><span class="p">:</span><span class="w"> </span><span class="s2">"python"</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"args"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"-m"</span><span class="p">,</span><span class="w"> </span><span class="s2">"swarm_city_mcp.server"</span><span class="p">],</span><span class="w">
+      </span><span class="nl">"env"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+        </span><span class="nl">"SWARM_ROOT"</span><span class="p">:</span><span class="w"> </span><span class="s2">"/path/to/oasis-x"</span><span class="w">
+      </span><span class="p">}</span><span class="w">
+    </span><span class="p">}</span><span class="w">
+  </span><span class="p">}</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<p><strong>Windsurf / Cursor</strong>: Configure via their MCP settings panel.
+See <code class="language-plaintext highlighter-rouge">docs/PLATFORM_SETUP.md</code> for platform-specific instructions.</p>
+
+<h3 id="tool-reference">Tool Reference</h3>
+
+<h4 id="swarm_bootstrap"><code class="language-plaintext highlighter-rouge">swarm_bootstrap</code></h4>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm_bootstrap(path: str = ".") -&gt; str
+</code></pre></div></div>
+<p>Returns the contents of <code class="language-plaintext highlighter-rouge">BOOTSTRAP.md</code> for the given path (walks up to find <code class="language-plaintext highlighter-rouge">.swarm/</code>).
+Use this as the first call in any session to get the current protocol.</p>
+
+<h4 id="swarm_context"><code class="language-plaintext highlighter-rouge">swarm_context</code></h4>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm_context(path: str = ".") -&gt; str
+</code></pre></div></div>
+<p>Returns <code class="language-plaintext highlighter-rouge">context.md</code> for the <code class="language-plaintext highlighter-rouge">.swarm/</code> directory nearest to <code class="language-plaintext highlighter-rouge">path</code>.</p>
+
+<h4 id="swarm_state"><code class="language-plaintext highlighter-rouge">swarm_state</code></h4>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm_state(path: str = ".", write: bool = False, fields: dict = None) -&gt; str
+</code></pre></div></div>
+<p>Read or write <code class="language-plaintext highlighter-rouge">state.md</code>.</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">write=False</code>: returns current state.md contents</li>
+  <li><code class="language-plaintext highlighter-rouge">write=True, fields={"current_focus": "...", "handoff_note": "..."}</code>:
+updates specified fields in state.md, returns updated contents.</li>
+</ul>
+
+<p>Writable fields: <code class="language-plaintext highlighter-rouge">current_focus</code>, <code class="language-plaintext highlighter-rouge">active_items</code>, <code class="language-plaintext highlighter-rouge">blockers</code>, <code class="language-plaintext highlighter-rouge">ready_for_pickup</code>,
+<code class="language-plaintext highlighter-rouge">handoff_note</code>, <code class="language-plaintext highlighter-rouge">last_touched</code> (auto-set to now if write=True).</p>
+
+<h4 id="swarm_queue"><code class="language-plaintext highlighter-rouge">swarm_queue</code></h4>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm_queue(
+  path: str = ".",
+  section: str = "all",    # "active"|"pending"|"done"|"all"
+  priority: str = None,    # filter by priority
+  project: str = None,     # filter by project
+  id: str = None           # get specific item
+) -&gt; list[dict]
+</code></pre></div></div>
+<p>Returns list of work items as structured dicts:</p>
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">[{</span><span class="w">
+  </span><span class="nl">"id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"ORG-002"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"state"</span><span class="p">:</span><span class="w"> </span><span class="s2">"OPEN"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"description"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Implement SwarmCity CLI tool"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"priority"</span><span class="p">:</span><span class="w"> </span><span class="s2">"high"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"project"</span><span class="p">:</span><span class="w"> </span><span class="s2">"swarm-city-tooling"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"claimed_by"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"claimed_at"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"refs"</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="w">
+</span><span class="p">}]</span><span class="w">
+</span></code></pre></div></div>
+
+<h4 id="swarm_claim"><code class="language-plaintext highlighter-rouge">swarm_claim</code></h4>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm_claim(id: str, agent_id: str, path: str = ".") -&gt; dict
+</code></pre></div></div>
+<p>Atomically claims a work item. Returns the updated item dict.
+Raises error if item is already claimed by a different agent.</p>
+
+<h4 id="swarm_done"><code class="language-plaintext highlighter-rouge">swarm_done</code></h4>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm_done(id: str, agent_id: str, note: str = None, path: str = ".") -&gt; dict
+</code></pre></div></div>
+<p>Marks an item done, moves it to Done section. Updates state.md if agent matches
+current <code class="language-plaintext highlighter-rouge">active_items</code>.</p>
+
+<h4 id="swarm_add"><code class="language-plaintext highlighter-rouge">swarm_add</code></h4>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm_add(
+  description: str,
+  priority: str = "medium",
+  project: str = "misc",
+  notes: str = None,
+  refs: list[str] = None,
+  depends: list[str] = None,
+  path: str = "."
+) -&gt; dict
+</code></pre></div></div>
+<p>Adds a new work item. Auto-assigns next available ID. Returns new item dict.</p>
+
+<h4 id="swarm_append_memory"><code class="language-plaintext highlighter-rouge">swarm_append_memory</code></h4>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm_append_memory(
+  topic: str,
+  decision: str,
+  why: str,
+  tradeoff: str = None,
+  agent_id: str = "unknown",
+  path: str = "."
+) -&gt; str
+</code></pre></div></div>
+<p>Appends a formatted memory entry to <code class="language-plaintext highlighter-rouge">memory.md</code>. Returns the appended text.</p>
+
+<h4 id="swarm_audit"><code class="language-plaintext highlighter-rouge">swarm_audit</code></h4>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm_audit(path: str = ".", since_hours: int = 48) -&gt; list[dict]
+</code></pre></div></div>
+<p>Returns list of audit findings:</p>
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">[{</span><span class="w">
+  </span><span class="nl">"severity"</span><span class="p">:</span><span class="w"> </span><span class="s2">"WARN"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"stale_claim"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"item_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"CLD-042"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"message"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Claimed 72h ago by claude-code, no state update"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"suggested_action"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Re-evaluate or mark PARTIAL"</span><span class="w">
+</span><span class="p">}]</span><span class="w">
+</span></code></pre></div></div>
+
+<h4 id="swarm_handoff"><code class="language-plaintext highlighter-rouge">swarm_handoff</code></h4>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm_handoff(path: str = ".", format: str = "md") -&gt; str
+</code></pre></div></div>
+<p>Generates a handoff document. Same output as <code class="language-plaintext highlighter-rouge">swarm handoff</code> CLI.</p>
+
+<h3 id="implementation-notes-1">Implementation Notes</h3>
+
+<ul>
+  <li>Use <code class="language-plaintext highlighter-rouge">anyio</code> for async file I/O within the MCP server</li>
+  <li>The server is stateless — all state is on-disk in <code class="language-plaintext highlighter-rouge">.swarm/</code> files</li>
+  <li>Use file locking (<code class="language-plaintext highlighter-rouge">fcntl.flock</code> on Unix) for atomic writes to queue.md</li>
+  <li>Path resolution: always walk up from the given path until <code class="language-plaintext highlighter-rouge">.swarm/</code> is found,
+or return an error if not found within 5 parent directories</li>
+  <li>Log all write operations to a per-session append-only log at
+<code class="language-plaintext highlighter-rouge">.swarm/.mcp-session-&lt;date&gt;.log</code> (gitignored) for debugging</li>
+</ul>
+
+<hr />
+
+<h2 id="9-git-topology">9. Git Topology</h2>
+
+<h3 id="current-state">Current State</h3>
+
+<p><code class="language-plaintext highlighter-rouge">oasis-x/</code> is not a git repository. Division repos are independent git repos.</p>
+
+<h3 id="phase-0-current-no-git-at-org-level">Phase 0 (current): No git at org level</h3>
+
+<p><code class="language-plaintext highlighter-rouge">.swarm/</code> files exist on the filesystem but are not version-controlled at org level.
+This is acceptable for Phase 0 — focus is on getting the protocol right.</p>
+
+<h3 id="phase-1-goal-thin-org-level-git-repo">Phase 1 Goal: Thin org-level git repo</h3>
+
+<p>Initialize <code class="language-plaintext highlighter-rouge">oasis-x</code> as a git repo that tracks ONLY <code class="language-plaintext highlighter-rouge">.swarm/</code> and <code class="language-plaintext highlighter-rouge">swarm-city/</code>:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">cd </span>oasis-x/
+git init
+<span class="nb">cat</span> <span class="o">&gt;</span> .gitignore <span class="o">&lt;&lt;</span> <span class="sh">'</span><span class="no">EOF</span><span class="sh">'
+# Track only .swarm/ coordination state and swarm-city/ project
+*
+!.swarm/
+!.swarm/**
+!swarm-city/
+!swarm-city/**
+!.gitignore
+!AGENTS.md
+</span><span class="no">EOF
+</span>git add .swarm/ swarm-city/ .gitignore AGENTS.md
+git commit <span class="nt">-m</span> <span class="s2">"chore: initialize SwarmCity coordination layer"</span>
+</code></pre></div></div>
+
+<p>This gives:</p>
+<ul>
+  <li>Full git history on all <code class="language-plaintext highlighter-rouge">.swarm/</code> state changes (who claimed what, when)</li>
+  <li>Org-level PRs for org-level initiatives</li>
+  <li>No submodule overhead — division repos stay independent</li>
+  <li>The org git repo is lightweight (only markdown files)</li>
+</ul>
+
+<h3 id="division-repos">Division repos</h3>
+
+<p>Division repos track their own <code class="language-plaintext highlighter-rouge">.swarm/</code> as part of their normal git history.
+No changes needed to existing git setup.</p>
+
+<h3 id="cross-repo-auditing">Cross-repo auditing</h3>
+
+<p>The CI/CD drift check (see section 10) uses GitHub API to read division <code class="language-plaintext highlighter-rouge">.swarm/state.md</code>
+files from their respective repos. No git submodules needed.</p>
+
+<hr />
+
+<h2 id="10-cicd-documentation-drift-check">10. CI/CD Documentation Drift Check</h2>
+
+<h3 id="purpose">Purpose</h3>
+
+<p>When code changes are pushed to a division repo, a GitHub Action checks whether
+the division’s <code class="language-plaintext highlighter-rouge">.swarm/state.md</code> and <code class="language-plaintext highlighter-rouge">.swarm/queue.md</code> accurately reflect those changes.
+It calls Bedrock (Claude) to generate a natural-language assessment and posts it as a
+PR comment.</p>
+
+<h3 id="workflow-file-location">Workflow File Location</h3>
+
+<p><code class="language-plaintext highlighter-rouge">oasis-cloud-admin/.github/workflows/swarm-drift-check.yml</code>
+(The admin repo is the control plane — CI/CD lives here.)</p>
+
+<p>Or per-division at <code class="language-plaintext highlighter-rouge">&lt;repo&gt;/.github/workflows/swarm-drift-check.yml</code>.</p>
+
+<h3 id="workflow-spec">Workflow Spec</h3>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">name</span><span class="pi">:</span> <span class="s">SwarmCity Drift Check</span>
+
+<span class="na">on</span><span class="pi">:</span>
+  <span class="na">pull_request</span><span class="pi">:</span>
+    <span class="na">types</span><span class="pi">:</span> <span class="pi">[</span><span class="nv">opened</span><span class="pi">,</span> <span class="nv">synchronize</span><span class="pi">]</span>
+  <span class="na">push</span><span class="pi">:</span>
+    <span class="na">branches</span><span class="pi">:</span> <span class="pi">[</span><span class="nv">dev</span><span class="pi">,</span> <span class="nv">prod</span><span class="pi">]</span>
+
+<span class="na">jobs</span><span class="pi">:</span>
+  <span class="na">drift-check</span><span class="pi">:</span>
+    <span class="na">runs-on</span><span class="pi">:</span> <span class="s">ubuntu-latest</span>
+    <span class="na">permissions</span><span class="pi">:</span>
+      <span class="na">pull-requests</span><span class="pi">:</span> <span class="s">write</span>
+      <span class="na">contents</span><span class="pi">:</span> <span class="s">read</span>
+
+    <span class="na">steps</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="na">uses</span><span class="pi">:</span> <span class="s">actions/checkout@v4</span>
+        <span class="na">with</span><span class="pi">:</span>
+          <span class="na">fetch-depth</span><span class="pi">:</span> <span class="m">0</span>  <span class="c1"># need full history for diff</span>
+
+      <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">Get changed files</span>
+        <span class="na">id</span><span class="pi">:</span> <span class="s">changes</span>
+        <span class="na">run</span><span class="pi">:</span> <span class="pi">|</span>
+          <span class="s">git diff --name-only origin/$...HEAD &gt; /tmp/changed_files.txt</span>
+          <span class="s">cat /tmp/changed_files.txt</span>
+
+      <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">Read .swarm state</span>
+        <span class="na">run</span><span class="pi">:</span> <span class="pi">|</span>
+          <span class="s">cat .swarm/state.md &gt; /tmp/state.md 2&gt;/dev/null || echo "(no state.md)" &gt; /tmp/state.md</span>
+          <span class="s">cat .swarm/queue.md &gt; /tmp/queue.md 2&gt;/dev/null || echo "(no queue.md)" &gt; /tmp/queue.md</span>
+
+      <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">Get diff summary</span>
+        <span class="na">run</span><span class="pi">:</span> <span class="pi">|</span>
+          <span class="s">git diff origin/$...HEAD -- '*.py' '*.ts' '*.rs' \</span>
+            <span class="s">| head -500 &gt; /tmp/diff.txt</span>
+
+      <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">Check drift with Bedrock</span>
+        <span class="na">id</span><span class="pi">:</span> <span class="s">drift</span>
+        <span class="na">env</span><span class="pi">:</span>
+          <span class="na">AWS_ACCESS_KEY_ID</span><span class="pi">:</span> <span class="s">$</span>
+          <span class="na">AWS_SECRET_ACCESS_KEY</span><span class="pi">:</span> <span class="s">$</span>
+          <span class="na">AWS_DEFAULT_REGION</span><span class="pi">:</span> <span class="s">us-east-1</span>
+        <span class="na">run</span><span class="pi">:</span> <span class="pi">|</span>
+          <span class="s">python3 - &lt;&lt; 'PYEOF'</span>
+          <span class="s">import boto3, json, sys</span>
+
+          <span class="s">bedrock = boto3.client('bedrock-runtime', region_name='us-east-1')</span>
+
+          <span class="s">diff = open('/tmp/diff.txt').read()[:3000]</span>
+          <span class="s">state = open('/tmp/state.md').read()</span>
+          <span class="s">queue = open('/tmp/queue.md').read()[:2000]</span>
+          <span class="s">changed = open('/tmp/changed_files.txt').read()</span>
+
+          <span class="s">prompt = f"""You are reviewing a pull request for documentation drift in a SwarmCity-coordinated repository.</span>
+
+          <span class="s">SwarmCity uses .swarm/state.md and .swarm/queue.md to track agent coordination state.</span>
+
+          <span class="s">Changed files in this PR:</span>
+          <span class="s">{changed}</span>
+
+          <span class="s">Current .swarm/state.md:</span>
+          <span class="s">{state}</span>
+
+          <span class="s">Current .swarm/queue.md (first 2000 chars):</span>
+          <span class="s">{queue}</span>
+
+          <span class="s">Code diff (first 3000 chars):</span>
+          <span class="s">{diff}</span>
+
+          <span class="s">Check:</span>
+          <span class="s">1. Does state.md's "Current focus" reflect what these code changes implement?</span>
+          <span class="s">2. Are the relevant work items in queue.md marked as [DONE] or [CLAIMED]?</span>
+          <span class="s">3. Are there new items that should be added to queue.md based on TODOs or incomplete work?</span>
+          <span class="s">4. Does memory.md need a new entry for any non-obvious decisions in this diff?</span>
+
+          <span class="s">Respond in markdown. Be specific about line references when flagging issues.</span>
+          <span class="s">If everything looks good, say so briefly. Maximum 300 words."""</span>
+
+          <span class="s">response = bedrock.invoke_model(</span>
+              <span class="s">modelId='anthropic.claude-sonnet-4-6',</span>
+              <span class="s">body=json.dumps({</span>
+                  <span class="s">'anthropic_version': 'bedrock-2023-05-31',</span>
+                  <span class="s">'max_tokens': 500,</span>
+                  <span class="s">'messages': [{'role': 'user', 'content': prompt}]</span>
+              <span class="s">})</span>
+          <span class="s">)</span>
+          <span class="s">result = json.loads(response['body'].read())</span>
+          <span class="s">assessment = result['content'][0]['text']</span>
+
+          <span class="s">with open('/tmp/drift_assessment.md', 'w') as f:</span>
+              <span class="s">f.write(f"## SwarmCity Drift Check\n\n{assessment}")</span>
+          <span class="s">PYEOF</span>
+
+      <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">Post PR comment</span>
+        <span class="na">if</span><span class="pi">:</span> <span class="s">github.event_name == 'pull_request'</span>
+        <span class="na">uses</span><span class="pi">:</span> <span class="s">actions/github-script@v7</span>
+        <span class="na">with</span><span class="pi">:</span>
+          <span class="na">script</span><span class="pi">:</span> <span class="pi">|</span>
+            <span class="s">const fs = require('fs');</span>
+            <span class="s">const body = fs.readFileSync('/tmp/drift_assessment.md', 'utf8');</span>
+            <span class="s">await github.rest.issues.createComment({</span>
+              <span class="s">owner: context.repo.owner,</span>
+              <span class="s">repo: context.repo.repo,</span>
+              <span class="s">issue_number: context.payload.pull_request.number,</span>
+              <span class="s">body</span>
+            <span class="s">});</span>
+</code></pre></div></div>
+
+<h3 id="adding-to-each-division">Adding to Each Division</h3>
+
+<p>Once the workflow is tested in one repo, add to each division’s <code class="language-plaintext highlighter-rouge">.github/workflows/</code>.
+The <code class="language-plaintext highlighter-rouge">swarm init</code> command will eventually create this file automatically.</p>
+
+<hr />
+
+<h2 id="11-implementation-phases">11. Implementation Phases</h2>
+
+<h3 id="phase-0--scaffold-current">Phase 0 — Scaffold (CURRENT)</h3>
+<p><strong>Goal</strong>: Org-level <code class="language-plaintext highlighter-rouge">.swarm/</code> structure exists and is usable by agents today.
+<strong>Status</strong>: In progress</p>
+
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Design SwarmCity architecture</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Create org-level <code class="language-plaintext highlighter-rouge">.swarm/BOOTSTRAP.md</code></li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Create org-level <code class="language-plaintext highlighter-rouge">.swarm/ROUTING.md</code></li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Create org-level <code class="language-plaintext highlighter-rouge">.swarm/GLOSSARY.md</code></li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Create org-level <code class="language-plaintext highlighter-rouge">.swarm/context.md</code></li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Create org-level <code class="language-plaintext highlighter-rouge">.swarm/state.md</code></li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Create org-level <code class="language-plaintext highlighter-rouge">.swarm/queue.md</code></li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Create org-level <code class="language-plaintext highlighter-rouge">.swarm/memory.md</code></li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Create <code class="language-plaintext highlighter-rouge">.swarm/workflows/agent-session.md</code></li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Create <code class="language-plaintext highlighter-rouge">.swarm/workflows/cross-division.md</code></li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Create <code class="language-plaintext highlighter-rouge">README.md</code> (root level)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Unify <code class="language-plaintext highlighter-rouge">src/swarm_city</code> and <code class="language-plaintext highlighter-rouge">src/swarm_city_mcp</code> into single package</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Create <code class="language-plaintext highlighter-rouge">docs/PLATFORM_SETUP.md</code> (shim templates)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Update <code class="language-plaintext highlighter-rouge">oasis-x/AGENTS.md</code> to point at <code class="language-plaintext highlighter-rouge">.swarm/BOOTSTRAP.md</code></li>
+</ul>
+
+<p><strong>Handoff</strong>: Phase 0 scaffolding is essentially complete. The core models and file operations are implemented, and the CLI/MCP server can be installed from the root directory.</p>
+
+<hr />
+
+<h3 id="phase-1--division-bootstrapping">Phase 1 — Division Bootstrapping</h3>
+<p><strong>Goal</strong>: All active divisions have <code class="language-plaintext highlighter-rouge">.swarm/</code> stubs and platform shims.
+<strong>Depends on</strong>: Phase 0 complete</p>
+
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" /><code class="language-plaintext highlighter-rouge">swarm init</code> logic for file creation and level detection</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Roll out to divisions: oasis-cloud, oasis-cloud-admin, oasis-weather, oasis-firmware,
+    oasis-home, oasis-ui, oasis-forms, oasis-hardware, oasis-welcome</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Populate each division’s <code class="language-plaintext highlighter-rouge">context.md</code> from existing AGENTS.md content</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Add platform shims to each division (CLAUDE.md, .windsurfrules, .cursorrules)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Migrate any relevant Beads issues to division queue.md files</li>
+</ul>
+
+<hr />
+
+<h3 id="phase-2--cli-tool-enhanced">Phase 2 — CLI Tool (Enhanced)</h3>
+<p><strong>Goal</strong>: <code class="language-plaintext highlighter-rouge">swarm</code> command works for all core operations.
+<strong>Status</strong>: Mostly complete</p>
+
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" /><code class="language-plaintext highlighter-rouge">swarm status</code> (state summary)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" /><code class="language-plaintext highlighter-rouge">swarm claim</code> / <code class="language-plaintext highlighter-rouge">swarm done</code> / <code class="language-plaintext highlighter-rouge">swarm partial</code> / <code class="language-plaintext highlighter-rouge">swarm block</code></li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" /><code class="language-plaintext highlighter-rouge">swarm add</code> (ID auto-assignment)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" /><code class="language-plaintext highlighter-rouge">swarm audit</code> (stale claim detection, drift detection)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" /><code class="language-plaintext highlighter-rouge">swarm handoff</code> (handoff doc generation)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" /><code class="language-plaintext highlighter-rouge">swarm ai</code> (Natural language to swarm ops)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><code class="language-plaintext highlighter-rouge">swarm sync</code> (org state snapshot refresh)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Unit tests for queue.md parsing</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Unified <code class="language-plaintext highlighter-rouge">pyproject.toml</code> for easy distribution</li>
+</ul>
+
+<hr />
+
+<h3 id="phase-3--mcp-server-enhanced">Phase 3 — MCP Server (Enhanced)</h3>
+<p><strong>Goal</strong>: <code class="language-plaintext highlighter-rouge">swarm_*</code> tools available in all MCP-compatible platforms.
+<strong>Status</strong>: Mostly complete</p>
+
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />MCP server implementation using unified models/operations</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Support for all core operations: claim, done, add, state, queue, context</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />File locking for atomic writes (verify implementation)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Platform setup docs (Claude Code, Windsurf, Cursor, Gemini, OpenCode)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Test with Claude Code MCP config</li>
+</ul>
+
+<hr />
+
+<h3 id="phase-4--cicd--git-topology">Phase 4 — CI/CD + Git Topology</h3>
+<p><strong>Goal</strong>: Drift check runs on every PR. Org has git history.
+<strong>Depends on</strong>: Phase 1</p>
+
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Add <code class="language-plaintext highlighter-rouge">swarm-drift-check.yml</code> to oasis-cloud-admin (test on one repo first)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Roll out to all active division repos</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Initialize <code class="language-plaintext highlighter-rouge">oasis-x</code> as thin git repo (track .swarm/ + swarm-city/ only)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />First commit of all Phase 0–1 .swarm/ files</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Configure GitHub repo for oasis-x (org visibility)</li>
+</ul>
+
+<hr />
+
+<h3 id="phase-5--remove-beads">Phase 5 — Remove Beads</h3>
+<p><strong>Goal</strong>: No <code class="language-plaintext highlighter-rouge">.beads/</code> directories anywhere.
+<strong>Depends on</strong>: Phase 1</p>
+
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Export Beads JSONL backup: <code class="language-plaintext highlighter-rouge">bd export --output .beads/backup/</code></li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Archive JSONL files in <code class="language-plaintext highlighter-rouge">swarm-city/archive/beads-migration/</code></li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Delete <code class="language-plaintext highlighter-rouge">.beads/</code> from oasis-home</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Uninstall <code class="language-plaintext highlighter-rouge">bd</code> CLI globally</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Remove <code class="language-plaintext highlighter-rouge">.beads/</code> from any other repos if present</li>
+</ul>
+
+<hr />
+
+<h2 id="12-session-handoff-guide">12. Session Handoff Guide</h2>
+
+<p>This section is specifically for picking up SwarmCity work across sessions.</p>
+
+<h3 id="starting-a-new-session-on-swarmcity">Starting a New Session on SwarmCity</h3>
+
+<ol>
+  <li>Read this file (README.md) from top to bottom — or at minimum sections 3, 4, 11.</li>
+  <li>Read <code class="language-plaintext highlighter-rouge">oasis-x/.swarm/state.md</code> for current focus.</li>
+  <li>Read <code class="language-plaintext highlighter-rouge">oasis-x/.swarm/queue.md</code> for available items.</li>
+  <li>Claim the next available ORG or SWC item.</li>
+</ol>
+
+<h3 id="the-most-important-files">The Most Important Files</h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>oasis-x/.swarm/BOOTSTRAP.md     ← protocol every agent follows
+oasis-x/.swarm/queue.md          ← what needs doing
+oasis-x/.swarm/state.md          ← where things stand right now
+oasis-x/README.md                ← root project overview
+oasis-x/docs/ARCHITECTURE.md     ← this file (the bible)
+oasis-x/docs/PLATFORM_SETUP.md   ← platform specific shims
+</code></pre></div></div>
+
+<h3 id="implementing-the-cli--mcp-pickup">Implementing the CLI / MCP (pickup)</h3>
+
+<p>Source code lives in <code class="language-plaintext highlighter-rouge">src/</code>:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">src/swarm_city/cli.py</code>           ← Click commands</li>
+  <li><code class="language-plaintext highlighter-rouge">src/swarm_city/models.py</code>        ← Shared data models</li>
+  <li><code class="language-plaintext highlighter-rouge">src/swarm_city/operations.py</code>    ← Atomic file operations</li>
+  <li><code class="language-plaintext highlighter-rouge">src/swarm_city_mcp/server.py</code>    ← MCP tool wrappers</li>
+</ul>
+
+<p>The CLI and MCP server share the same data models and operation logic. To install locally:
+<code class="language-plaintext highlighter-rouge">pip install -e .</code></p>
+
+<p>To test the MCP server:
+<code class="language-plaintext highlighter-rouge">python -m swarm_city_mcp.server</code></p>
+
+<h3 id="known-issues--gotchas">Known Issues / Gotchas</h3>
+
+<ul>
+  <li>The queue.md format must be parsed with regex, not markdown parsers (they don’t
+handle the inline stamp syntax reliably). See <code class="language-plaintext highlighter-rouge">operations.py</code> for the regex patterns.</li>
+  <li><code class="language-plaintext highlighter-rouge">state.md</code> has a fixed field structure. Use line-by-line replacement, not YAML parsing.</li>
+  <li>For division-level BOOTSTRAP.md, the pointer approach (option 2) is preferred over
+copying to avoid protocol drift when BOOTSTRAP.md is updated.</li>
+  <li>The <code class="language-plaintext highlighter-rouge">swarm audit</code> stale threshold (48h) is configurable via <code class="language-plaintext highlighter-rouge">SWARM_STALE_HOURS</code> env var.</li>
+</ul>

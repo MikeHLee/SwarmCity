@@ -1,0 +1,134 @@
+<h1 id="dot_swarm-drift-check--setup-guide">dot_swarm Drift Check — Setup Guide</h1>
+
+<p>The <code class="language-plaintext highlighter-rouge">swarm-drift-check.yml</code> workflow uses <strong>AWS Bedrock (Amazon Nova Micro)</strong> to assess
+documentation drift between code changes and <code class="language-plaintext highlighter-rouge">.swarm/</code> state on every merge to <code class="language-plaintext highlighter-rouge">dev</code>/<code class="language-plaintext highlighter-rouge">prod</code>.</p>
+
+<p>The quickest way to install it:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm setup-drift-check          <span class="c"># interactive — prompts for any missing secrets</span>
+swarm setup-drift-check <span class="nt">--commit</span> <span class="c"># also commits and pushes the workflow file</span>
+</code></pre></div></div>
+
+<p>Or follow the manual steps below.</p>
+
+<hr />
+
+<h2 id="1-enable-bedrock-model-access">1. Enable Bedrock Model Access</h2>
+
+<ol>
+  <li>AWS Console → <strong>Amazon Bedrock</strong> → <strong>Model access</strong></li>
+  <li>Click <strong>Modify model access</strong> → enable <strong>Amazon Nova Micro</strong></li>
+  <li>Submit (usually instant)</li>
+</ol>
+
+<blockquote>
+  <p>Do this once per AWS account/region.</p>
+</blockquote>
+
+<hr />
+
+<h2 id="2-github-secrets">2. GitHub Secrets</h2>
+
+<p>The workflow reuses AWS credentials already present from deploy workflows.
+Check <strong>Settings → Secrets → Actions</strong> for:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Secret</th>
+      <th>Required</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">AWS_ACCESS_KEY_ID</code></td>
+      <td>yes</td>
+      <td>IAM user key with <code class="language-plaintext highlighter-rouge">bedrock:InvokeModel</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">AWS_SECRET_ACCESS_KEY</code></td>
+      <td>yes</td>
+      <td>Matching secret</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">AWS_DEFAULT_REGION</code></td>
+      <td>recommended</td>
+      <td>Defaults to <code class="language-plaintext highlighter-rouge">us-east-1</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<p>If the IAM user doesn’t have Bedrock access, add this inline policy:</p>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"Version"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2012-10-17"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"Statement"</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="w">
+    </span><span class="nl">"Effect"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Allow"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"Action"</span><span class="p">:</span><span class="w"> </span><span class="s2">"bedrock:InvokeModel"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"Resource"</span><span class="p">:</span><span class="w"> </span><span class="s2">"arn:aws:bedrock:*::foundation-model/amazon.nova-micro-v1:0"</span><span class="w">
+  </span><span class="p">}]</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<p><strong>Org-level secrets</strong> (recommended): set once and all division repos inherit them.
+GitHub Org → Settings → Secrets → Actions → New organization secret</p>
+
+<hr />
+
+<h2 id="3-changing-the-model">3. Changing the Model</h2>
+
+<p>Set a repo/org <strong>variable</strong> (not secret) named <code class="language-plaintext highlighter-rouge">SWARM_BEDROCK_MODEL</code>:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Model</th>
+      <th>Use case</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">amazon.nova-micro-v1:0</code></td>
+      <td><strong>Default</strong> — fast, cheap</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">anthropic.claude-3-5-sonnet-20241022-v2:0</code></td>
+      <td>Deeper analysis</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>gh variable <span class="nb">set </span>SWARM_BEDROCK_MODEL <span class="nt">--body</span> <span class="s2">"anthropic.claude-3-5-sonnet-20241022-v2:0"</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Symptom</th>
+      <th>Fix</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">Bedrock invocation failed</code></td>
+      <td>Check IAM <code class="language-plaintext highlighter-rouge">bedrock:InvokeModel</code> policy; check region</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">Could not load credentials</code></td>
+      <td>AWS secrets not set</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">AccessDeniedException</code></td>
+      <td>Enable model access in Bedrock console (step 1)</td>
+    </tr>
+    <tr>
+      <td>Comment not posted</td>
+      <td>Workflow needs <code class="language-plaintext highlighter-rouge">pull-requests: write</code> permission</td>
+    </tr>
+  </tbody>
+</table>
