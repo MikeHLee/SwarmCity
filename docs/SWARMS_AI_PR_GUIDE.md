@@ -1,3 +1,7 @@
+---
+nav_exclude: true
+---
+
 # swarms.ai Integration — PR Guide (SWC-015)
 
 **Target repo**: `github.com/kyegomez/swarms`

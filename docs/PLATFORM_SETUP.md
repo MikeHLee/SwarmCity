@@ -1,3 +1,7 @@
+---
+nav_exclude: true
+---
+
 # dot_swarm Platform Setup
 
 Copy-paste shim templates for each agent platform. Each shim is a thin one-liner

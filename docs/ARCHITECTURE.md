@@ -1,3 +1,8 @@
+---
+title: Architecture
+nav_order: 4
+---
+
 # dot_swarm — Implementation Bible
 
 **Version**: 0.3.0

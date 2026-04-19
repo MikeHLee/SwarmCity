@@ -1,3 +1,8 @@
+---
+title: Credits
+nav_order: 5
+---
+
 # Credits & Inspirations
 
 dot_swarm stands on the shoulders of decades of research into how complex,

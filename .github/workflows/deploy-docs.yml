@@ -6,8 +6,6 @@ on:
       - main
     paths:
       - 'docs/**'
-      - 'README.md'
-      - 'mkdocs.yml'
       - '.github/workflows/deploy-docs.yml'
 
 jobs:
@@ -18,14 +16,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: ruby/setup-ruby@v1
         with:
-          python-version: 3.x
+          ruby-version: '3.3'
+          bundler-cache: true
+          working-directory: docs
 
-      - name: Install dependencies
-        run: |
-          pip install mkdocs-material
+      - name: Build Jekyll site
+        run: bundle exec jekyll build -d ../_site
+        working-directory: docs
+        env:
+          JEKYLL_ENV: production
 
       - name: Deploy to GitHub Pages
-        run: mkdocs gh-deploy --force
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./_site

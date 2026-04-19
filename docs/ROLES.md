@@ -1,3 +1,8 @@
+---
+title: Agent Roles
+nav_order: 3
+---
+
 # Agent Roles
 
 Agent roles extend dot_swarm coordination with structured behaviors for multi-agent
@@ -21,14 +26,15 @@ swarm role show inspector              # full config
 | **inspector** | Requires proof-of-work before an item can be marked done | `swarm inspect` |
 | **supervisor** | Holistic progress view across all active items and phases | `swarm spawn --role supervisor` |
 
-!!! note "Watchdog and Librarian are now built-in"
-    The **watchdog** escalation pattern is now intrinsic to the inspector retry loop —
-    items auto-BLOCK when retries are exhausted, surfacing in `swarm audit` and
-    `swarm status` without a separate role agent. Use `swarm spawn --role watchdog`
-    to open a dedicated monitoring window if you want a live operator.
-
-    The **librarian** catalog function is now `swarm crawl`. Run it alongside
-    `swarm heal` for a full context + alignment pass — no separate role required.
+{: .note }
+> **Watchdog and Librarian are now built-in.**
+> The **watchdog** escalation pattern is now intrinsic to the inspector retry loop —
+> items auto-BLOCK when retries are exhausted, surfacing in `swarm audit` and
+> `swarm status` without a separate role agent. Use `swarm spawn --role watchdog`
+> to open a dedicated monitoring window if you want a live operator.
+>
+> The **librarian** catalog function is now `swarm crawl`. Run it alongside
+> `swarm heal` for a full context + alignment pass — no separate role required.
 
 ---
 

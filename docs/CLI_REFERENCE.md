@@ -1,3 +1,8 @@
+---
+title: CLI Reference
+nav_order: 2
+---
+
 # CLI Reference
 
 `swarm` is installed as a standalone command via `pip install dot-swarm`.
@@ -145,11 +150,11 @@ swarm done CLD-042 --note "Used converse API instead of invoke-model"
 swarm done CLD-042 --next "Pick up CLD-043 next"   # update state.md focus
 ```
 
-!!! warning "Inspector gate"
-    When the **inspector** role is enabled, `swarm done` is blocked unless the item
-    has valid proof attached. Workers must use `swarm partial --proof` first, then
-    an inspector agent runs `swarm inspect --pass`. Use `--force` to bypass as a
-    human director.
+{: .warning }
+> **Inspector gate:** When the **inspector** role is enabled, `swarm done` is blocked
+> unless the item has valid proof attached. Workers must use `swarm partial --proof`
+> first, then an inspector agent runs `swarm inspect --pass`. Use `--force` to bypass
+> as a human director.
 
 ```bash
 swarm done CLD-042 --force    # human director override

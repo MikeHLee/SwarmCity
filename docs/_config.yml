@@ -1,0 +1,42 @@
+title: dot_swarm
+description: "Minimal, git-native, markdown-first agent orchestration for multi-repo organizations."
+theme: just-the-docs
+
+url: "https://oasis-main.github.io"
+baseurl: "/dot_swarm"
+
+color_scheme: oasis
+
+search_enabled: true
+heading_anchors: true
+nav_sort: case_insensitive
+
+aux_links:
+  "GitHub →":
+    - "https://github.com/oasis-main/dot_swarm"
+aux_links_new_tab: true
+
+footer_content: "MIT License &middot; <a href=\"https://github.com/oasis-main/dot_swarm\">github.com/oasis-main/dot_swarm</a>"
+
+defaults:
+  - scope:
+      path: "index.md"
+    values:
+      title: Home
+      nav_order: 1
+
+callouts_level: quiet
+callouts:
+  note:
+    title: Note
+    color: blue
+  warning:
+    title: Warning
+    color: yellow
+
+exclude:
+  - Gemfile
+  - Gemfile.lock
+
+plugins:
+  - jekyll-seo-tag

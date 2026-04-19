@@ -1,3 +1,7 @@
+---
+nav_exclude: true
+---
+
 # dot_swarm Integration Plan: Swarm Heal, OGP Federation, Scheduling & swarms.ai
 
 **Created**: 2026-04-06

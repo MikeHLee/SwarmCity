@@ -1,3 +1,7 @@
+---
+nav_exclude: true
+---
+
 # dot_swarm Drift Check — Setup Guide
 
 The `swarm-drift-check.yml` workflow uses **AWS Bedrock (Amazon Nova Micro)** to assess
