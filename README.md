@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="logo.gif" alt="dot_swarm" width="480" />
+  <img src="logo_white.gif" alt="dot_swarm" width="480" />
   <h1>The .Swarm Protocol</h1>
   <p><strong>Minimal, git-native, markdown-first agent orchestration for multi-repo organizations.</strong></p>
 </div>
