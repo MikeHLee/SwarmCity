@@ -1,14 +1,27 @@
 # State — dot_swarm
 
-**Last touched**: 2026-04-19T00:00Z by human-ML
-**Current focus**: Multi-agent tooling complete — spawn, crawl, retry logic, docs
+**Last touched**: 2026-04-19T12:00Z by human-ML + claude-sonnet-4-6
+**Current focus**: Docs migrated to Jekyll/just-the-docs; README overhauled; roadmap expanded
 **Active items**: (none)
 **Blockers**: PyPI Trusted Publishing not yet configured (manual step for SWC-003)
-**Ready for pickup**: SWC-021 (supervisor brief), SWC-024 (merge queue), SWC-007, SWC-008, SWC-009
+**Ready for pickup**: SWC-026 (trail visibility toggle), SWC-028 (ollama backend), SWC-030 (security docs), SWC-021, SWC-007, SWC-008, SWC-009
 
 ---
 
 ## Handoff Note
+
+**Docs + README overhaul (2026-04-19)**:
+Migrated from MkDocs Material → Jekyll just-the-docs with oasis-x color scheme
+(#fafafa bg, teal #165f59 accent, Montserrat font — pulled live from dev.o-x.io).
+New: docs/Gemfile, docs/_config.yml, docs/_sass/color_schemes/oasis.scss,
+docs/_includes/head_custom.html. Deploy workflow updated to ruby/setup-ruby + peaceiris/actions-gh-pages.
+README: rewritten hero tagline ("ecologically-inspired, environment-first"), expanded stigmergy section,
+added spawn/crawl/role/inspect quick starts, docs nav links at top.
+Queued: SWC-026 (trail visibility), SWC-027 (init/crawl/explore coupling), SWC-028 (ollama backend),
+SWC-029 (opencode+tmux workflow docs), SWC-030 (security overhaul), SWC-031 (generic examples),
+SWC-032 (move internal notes to .swarm trail).
+oasis-x queue: ORG-044 added — human to-do lists backed by .swarm protocol for oasis-scientific
+dashboard + oasis-home mobile app ("symbiotic intelligence" — human and agent share the same queue.md).
 
 **Spawn, crawl, retry logic complete (2026-04-19)**:
 swarm spawn: tmux worker/role launcher with auto-claim, SWARM_AGENT_ID/ROLE env, opencode|claude|ollama|bedrock.

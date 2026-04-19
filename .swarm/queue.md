@@ -195,6 +195,103 @@ Item IDs: `SWC-<3-digit-number>` — assigned sequentially, never reused.
              swarm crawl: crawl_directory() in operations.py, --depth/--create-items/--dry-run.
              Watchdog and Librarian roles subsumed; simpler architecture overall.
 
+<!-- ═══════════════ CLI IMPROVEMENTS ═══════════════ -->
+
+- [ ] [SWC-026] [OPEN] swarm trail visible/invisible — gitignore-based .swarm sharing toggle
+      project: cli-core
+      priority: high
+      notes: Simple gitignore manipulation. `swarm trail invisible` adds .swarm/ to .gitignore
+             (default on init). `swarm trail visible` removes .swarm/ from .gitignore.
+             `swarm init` should default to invisible (trail private unless opted in).
+             Solves the "sharing source = sharing swarm history" exposure risk.
+             `swarm trail status` reports current visibility + gitignore state.
+             Edge cases: nested .gitignore, already-committed .swarm/ files (warn user).
+
+- [ ] [SWC-027] [OPEN] Tighten init/crawl/explore coupling
+      project: cli-core
+      priority: medium
+      notes: No redundancy to remove — init creates blank .swarm/, crawl populates context.md
+             with Directory Map, explore is read-only display. But they should be coupled:
+             - swarm init should offer to run swarm crawl immediately after (--crawl flag)
+             - swarm crawl should detect dirs that need init and warn/offer to run it
+             - swarm explore should surface crawl coverage (which dirs have been catalogued)
+             Goal: init → crawl → explore forms a coherent onboarding arc.
+
+- [ ] [SWC-028] [OPEN] Ollama AI backend integration (alongside Bedrock)
+      project: ai-features
+      priority: high
+      notes: swarm spawn --agent ollama already launches ollama in tmux as a worker tool,
+             but there is no ollama equivalent to the Bedrock API backend in ai_ops.py.
+             Add OllamaBackend to ai_ops.py: ollama REST API (localhost:11434/api/chat),
+             model selection via swarm configure --provider ollama --model llama3.2,
+             streaming responses, same tool-call interface as BedrockBackend.
+             Also consider: LM Studio (compatible API), vLLM, Groq, Anthropic direct.
+             Provider abstraction: unify under AbstractAIBackend so swarm ai works
+             identically regardless of backend.
+
+- [ ] [SWC-029] [OPEN] Document opencode+tmux multi-agent workflow end-to-end
+      project: docs
+      priority: high
+      notes: Full spawn→claim→implement→proof→inspect→merge flow is implemented but
+             undocumented end-to-end. Need a dedicated workflow guide:
+             1. swarm role enable inspector --max-iterations 3
+             2. swarm spawn SWC-042 --agent opencode  (worker tmux window, auto-claim)
+             3. Worker reads BOOTSTRAP.md, implements, runs tests
+             4. swarm partial SWC-042 --proof "branch:X commit:Y tests:N/N"
+             5. swarm spawn --role inspector  (second tmux window)
+             6. swarm inspect SWC-042 --pass|--fail
+             7. swarm done / auto-block on exhaust
+             Also document: env vars set in each window (SWARM_AGENT_ID/ITEM_ID/ROLE),
+             which swarm commands to enable (role enable inspector + spawn deps: tmux 3.0+).
+             Open question: add support for "pi" agentic coding harness? (clarify what
+             "pi agentic" refers to — Raspberry Pi edge deployment? pi.ai terminal agent?
+             Other? — pending user clarification before scoping.)
+
+- [ ] [SWC-030] [OPEN] README + docs: security section overhaul with benefits AND vulnerabilities
+      project: docs
+      priority: high
+      notes: Current security section is thin. Expand with:
+             BENEFITS: HMAC-SHA256 per-swarm identity; 18-pattern adversarial scanner
+             (CRITICAL/HIGH/MEDIUM); signed trail.log; swarm heal cross-validates all
+             .swarm/ files; pheromone decay flags stale claims; cross-swarm poisoning
+             is extremely hard due to cryptographic stamps + audit chain.
+             VULNERABILITIES (honest disclosure): (1) Git-sharing = trail-sharing —
+             pushing a repo exposes full swarm history unless trail is invisible.
+             (2) HMAC signing is local-trust only (no PKI); a compromised swarm key
+             breaks trail integrity for that swarm. (3) No real-time cross-network
+             federation yet — federation is file-based OGP-lite, not live. (4) LLM
+             content in .swarm/ files (memory.md, notes) is trust-boundary — an
+             agent writing adversarial content to the shared medium can influence
+             other agents reading it (mitigated by scanner but not eliminated).
+             Add FUTURE: live networked federation across swarms (planned if userbase
+             warrants it). Existing gitignore toggle (SWC-026) as the near-term fix.
+
+- [ ] [SWC-031] [OPEN] Replace oasis-x specific examples in docs with rich generic examples
+      project: docs
+      priority: medium
+      notes: Current docs use oasis-x division structure and internal project names as
+             examples. Replace with two sets of generic examples:
+             BUSINESS: multi-service SaaS org (api-service, auth-service, dashboard)
+               with realistic cross-division work items, federation messages, audit trails.
+             PERSONAL: solo developer managing multiple projects (side-project, dotfiles,
+               homelab) using dot_swarm for personal task and context management.
+             Also: move oasis-x operating structure info OUT of docs and INTO the
+             oasis-x .swarm directory (see SWC-032).
+
+- [ ] [SWC-032] [OPEN] Move collaboration/integration notes from docs into .swarm trail; make invisible
+      project: docs
+      priority: medium
+      notes: SWARMS_AI_PR_GUIDE.md, INTEGRATION_PLAN.md, PLATFORM_SETUP.md contain
+             internal oasis-x operating info and integration notes. Move relevant
+             content into: .swarm/memory.md (decisions + rationale), .swarm/context.md
+             (architecture notes), .swarm/queue.md (open integration work items).
+             After migration: remove or heavily redact those docs pages (or mark
+             nav_exclude: true, which is already done).
+             Then run `swarm trail invisible` (SWC-026) to add .swarm/ to .gitignore
+             so the trail is private by default.
+             Also: move oasis-x portfolio/division structure examples into the
+             oasis-x .swarm directory, not the dot_swarm docs.
+
 - [ ] [SWC-024] [OPEN] Merge queue (lightweight Refinery) — serialize concurrent branch merges
       project: cli-roles
       priority: low

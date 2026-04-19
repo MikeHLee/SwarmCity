@@ -3,6 +3,12 @@
   <h1>The .Swarm Protocol</h1>
   <p><strong>An ecologically-inspired, environment-first coordination protocol for multi-agent AI teams.</strong></p>
   <p>No central node. No database. No credentials. Agents leave structured traces; the environment does the coordination.</p>
+  <p>
+    <a href="https://oasis-main.github.io/dot_swarm/"><strong>Documentation</strong></a> ·
+    <a href="https://oasis-main.github.io/dot_swarm/CLI_REFERENCE">CLI Reference</a> ·
+    <a href="https://oasis-main.github.io/dot_swarm/ROLES">Agent Roles</a> ·
+    <a href="https://github.com/oasis-main/dot_swarm">GitHub</a>
+  </p>
 </div>
 
 ---
