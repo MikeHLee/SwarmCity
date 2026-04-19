@@ -1,30 +1,50 @@
 <div align="center">
-  <img src="logo_white.gif" alt="dot_swarm" width="640" />
+  <img src="logo.gif" alt="dot_swarm" width="480" />
   <h1>The .Swarm Protocol</h1>
   <p><strong>Minimal, git-native, markdown-first agent orchestration for multi-repo organizations.</strong></p>
 </div>
 
 ---
 
-## Multi-Actor Coordination: A Common Problem
+## What's in the Box
 
-Modern software teams use multiple AI coding agents simultaneously across different
-platforms. Without coordination:
+dot_swarm is a layered toolkit. Every layer is opt-in — you can run the base protocol with zero dependencies, then add AI, security, roles, and federation only when you need them.
 
-- Two agents work on the same task simultaneously
-- Context is lost when chat history is compacted
-- Non-obvious decisions (why approach A over B) disappear forever
-- No agent knows what the previous agent did or decided
-
-Existing solutions (Jira, Linear, GitHub Issues) require web UIs and API credentials.
-Database-backed tools add binary files and server processes to your repo.
-
-**dot_swarm takes a different approach: everything is a markdown file any agent on any
-platform can read and write directly.**
+| Layer | Commands | Install |
+|-------|----------|---------|
+| **Core protocol** | `init` `status` `add` `claim` `done` `partial` `block` `ready` `handoff` | `pip install dot-swarm` |
+| **Situational awareness** | `ls` `explore` `report` `audit` `heal` | base |
+| **Scheduling & workflows** | `schedule` `workflow` | base |
+| **Cross-repo federation** | `federation` | base |
+| **Cryptographic signing** | auto — every `init` generates an identity | base |
+| **AI operations** | `ai` `session` `configure` | `pip install 'dot-swarm[ai]'` |
+| **Agent roles** | `role` `inspect` | base |
+| **MCP server** | `dot-swarm-mcp` — Claude Code / Cursor / Windsurf native | base |
 
 ---
 
-## Stimergic Systems: Nature's Answer 
+## The Problem: Multi-Agent Coordination
+
+Modern software teams run multiple AI coding agents simultaneously — Claude Code, Cursor,
+Windsurf, Gemini, opencode — across different repos and sessions. Without coordination:
+
+- Two agents claim and implement the same task simultaneously
+- Context is lost when a chat session ends or a context window is compacted
+- Non-obvious decisions (why approach A over B) disappear with the session
+- The next agent has no idea what the previous one did, decided, or left in-flight
+
+Existing solutions require infrastructure that gets in the way:
+
+- **Jira / Linear / GitHub Issues** — web UIs, API credentials, no agent-native format
+- **Database-backed tools** — binary files, server processes, another thing to run
+- **Slack bots / webhooks** — async, lossy, not git-auditable
+
+**dot_swarm's answer: everything is a markdown file, living in the repo, readable and
+writable by any agent on any platform with no credentials required.**
+
+---
+
+## Stigmergic Systems: Nature's Answer
 
 In nature, central coordinators are rarely used — and when they exist, they do not
 actively manage coordination.
@@ -39,10 +59,6 @@ node approving every action.
 The key property that makes this work: **all members speak the same chemical language.**
 Every worker interprets pheromone gradients the same way. The signal is the protocol.
 
-The cost of a central coordinator is not just latency — it is **information overload and
-single-point fragility**. A queen who had to consciously route every foraging decision
-would saturate immediately. The colony would slow to the speed of one brain.
-
 dot_swarm applies this directly to software agent fleets:
 
 !!! quote "The core principle"
@@ -52,14 +68,10 @@ dot_swarm applies this directly to software agent fleets:
     data loss from information overload.
 
 The `.swarm/` directory *is* the shared medium. `state.md` *is* the pheromone trail.
-`BOOTSTRAP.md` *is* the chemical language every agent reads first. As long as agents
-follow the same protocol, coordination emerges from the environment — no coordination
-service required.
+`BOOTSTRAP.md` *is* the chemical language every agent reads first.
 
-**Signals decay.** Pheromone trails evaporate when not reinforced. dot_swarm reflects
-this: `swarm audit` flags stale claims, `memory.md` entries are dated, and `state.md`
-timestamps tell any agent exactly how fresh the picture is. Old signals stop misleading
-new workers.
+**Signals decay.** `swarm audit` flags stale claims. `memory.md` entries are dated.
+`state.md` timestamps tell any agent exactly how fresh the picture is.
 
 ---
 
@@ -67,7 +79,7 @@ new workers.
 
 ### The `.swarm/` Directory
 
-Every repository gets a `.swarm/` directory with five files:
+Every repository gets a `.swarm/` directory. Five files are the protocol core:
 
 | File | Role |
 |------|------|
@@ -77,12 +89,8 @@ Every repository gets a `.swarm/` directory with five files:
 | `queue.md` | Work items with claim stamps |
 | `memory.md` | Non-obvious decisions and rationale (append-only) |
 
-### The Pheromone Trail
-
-Agents leave state traces (`state.md` updates) that guide successor agents without
-direct communication. The next agent reads `state.md` first — it tells you exactly
-where things stand in one glance. This is **stigmergy**: coordination via environment
-modification, not via message passing.
+Additional opt-in files: `trail.log` (signed audit), `schedules.md`, `workflows/`,
+`federation/`, `roles/`.
 
 ### The Claim Pattern
 
@@ -96,10 +104,21 @@ Work items use inline stamps for optimistic concurrency — no lock server neede
 ## Pending
 - [ ] [CLD-043] [OPEN] Add request ID tracing to all services
       priority: medium | project: observability
+      depends: CLD-042
 
 ## Done
 - [x] [CLD-041] [DONE · 2026-03-25T16:00Z] Update auth health check path
       project: cloud-stability
+```
+
+### Dependency-Aware Work Discovery
+
+`swarm ready` shows only items whose entire dependency chain is complete — equivalent
+to `bd ready` in the Gastown/Beads ecosystem, but with no database required:
+
+```bash
+swarm ready          # list what's safe to pick up right now
+swarm ready --json   # machine-readable, for agent scripts
 ```
 
 ### Hierarchical Coordination
@@ -116,13 +135,83 @@ Organization (your-company/)       ← cross-repo initiatives
 Work items use level-prefixed IDs: `ORG-001`, `CLD-042`, `FW-017`. Cross-division items
 live at org level with `refs:` pointers in each affected division's queue.
 
+Use `swarm ascend` and `swarm descend` to check alignment across levels.
+
+---
+
+## Quick Start
+
+=== "Project management only (no AI)"
+
+    ```bash
+    pip install dot-swarm
+
+    cd your-repo
+    swarm init                    # creates .swarm/ with signing identity
+    swarm add "Fix auth timeout" --priority high
+    swarm add "Add rate limiting" --depends CLD-001
+    swarm ready                   # see what's unblocked
+    swarm claim CLD-001
+    # ... do work ...
+    swarm done CLD-001 --note "Used exponential backoff"
+    swarm handoff                 # structured summary for next agent/human
+    ```
+
+=== "With AI (AWS Bedrock)"
+
+    ```bash
+    pip install 'dot-swarm[ai]'
+    swarm configure               # set model + region once
+
+    # Single AI turn
+    swarm ai "what should I work on next?"
+    swarm ai "mark CLD-042 done, merged the OAuth PR"
+
+    # Chained autonomous run
+    swarm ai "implement the auth module, then the markets module" --chain --max-steps 6
+    ```
+
+=== "With MCP (Claude Code / Cursor / Windsurf)"
+
+    ```bash
+    pip install dot-swarm
+
+    # Add to your MCP config (Claude Code: ~/.claude/mcp_config.json)
+    # {
+    #   "mcpServers": {
+    #     "dot-swarm": {
+    #       "command": "dot-swarm-mcp",
+    #       "args": []
+    #     }
+    #   }
+    # }
+
+    # dot_swarm state is now available as MCP tools in your IDE agent
+    # The agent can read queue, claim items, mark done — all natively
+    ```
+
+=== "With Agent Roles (multi-agent mode)"
+
+    ```bash
+    # Enable the inspector role — workers must prove completion
+    swarm role enable inspector --max-iterations 3
+
+    # Worker flow
+    swarm claim CLD-042
+    # ... implement feature, push branch ...
+    swarm partial CLD-042 --proof "branch:feature/oauth2 commit:abc1234 tests:42/42"
+
+    # Inspector flow (separate agent or human)
+    swarm inspect CLD-042 --pass
+    # or: swarm inspect CLD-042 --fail --reason "Edge case X fails"
+
+    # See all roles
+    swarm role list
+    ```
+
 ---
 
 ## Why Not a Central Service?
-
-The typical alternative — a shared task server, a Slack bot, a GitHub Issues label
-workflow — introduces a coordination bottleneck that does not exist in the natural
-systems that inspired dot_swarm:
 
 | Central-node approach | Swarm approach |
 |---|---|
@@ -133,40 +222,39 @@ systems that inspired dot_swarm:
 | Bottleneck grows with fleet size | Throughput scales with number of agents |
 | Complex de-duplication logic needed | Optimistic claims + audit resolves conflicts |
 
-The bee colony analogy is exact: **multi-master protocols** (hive splitting, independent
-sub-colonies) emerge naturally when agents share a medium rather than a manager. Any
-agent can start work on any unclaimed item without asking permission. The environment —
-not a coordinator — serializes conflicting writes through timestamps and claim stamps.
+dot_swarm is distinct from Gastown/Beads in being **multi-master** (no Mayor
+bottleneck), **feature-toggleable** (every layer is opt-in), and **federation-capable**
+across separate repos and organizations via signed OGP-lite messages.
 
 ---
 
-## Quick Start
+## Relationship to Gastown / Beads
 
-### 1. Install
+dot_swarm and Gastown solve overlapping problems with different tradeoffs:
 
-```bash
-pip install dot-swarm
+| | dot_swarm | Gastown + Beads |
+|---|---|---|
+| Storage | Markdown + git | Dolt (version-controlled SQL) + SQLite |
+| Coordination model | Multi-master stigmergy | Single Mayor per colony |
+| Feature toggles | Every layer opt-in | Fixed architecture |
+| Cross-org federation | OGP-lite signed messages | Single workspace |
+| IDE integration | MCP server (native) | tmux sessions |
+| Agent roles | inspector / watchdog / supervisor / librarian | Mayor / Polecats / Refinery / Witness / Deacon |
+| Dependencies | Zero (stdlib + click + mcp) | Dolt + SQLite3 + tmux |
 
-# With AI features (swarm ai, drift check)
-pip install 'dot-swarm[ai]'
-```
+Both are inspired by Steve Yegge's work and the broader stigmergy literature. dot_swarm
+was specifically designed to work in environments where you cannot install a database.
 
-### 2. Initialize
+---
 
-```bash
-cd your-repo
-swarm init
-swarm status
-```
+## Security Model
 
-### 3. Coordinate
+Every `swarm init` generates a per-swarm HMAC-SHA256 signing identity. All AI
+operations are signed and recorded in `trail.log`. `swarm audit --security` and
+`swarm heal` scan for 18 adversarial content patterns across three severity levels
+(CRITICAL / HIGH / MEDIUM) in all `.swarm/` files and platform shims.
 
-```bash
-swarm claim CLD-001
-# ... do work ...
-swarm done CLD-001 --note "Implemented JWT refresh via rotating secret"
-swarm handoff
-```
+See [CLI Reference → Security & Trust Model](CLI_REFERENCE.md#security-trust-model).
 
 ---
 
@@ -183,4 +271,4 @@ Theraulaz's *Swarm Intelligence* (1999).
 
 ## License
 
-MIT — [github.com/MikeHLee/dot_swarm](https://github.com/MikeHLee/dot_swarm)
+MIT — [github.com/oasis-main/dot_swarm](https://github.com/oasis-main/dot_swarm)
