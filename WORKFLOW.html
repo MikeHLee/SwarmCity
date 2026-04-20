@@ -1,0 +1,367 @@
+<h1 id="multi-agent-workflow">Multi-Agent Workflow</h1>
+
+<p>This guide walks through the complete flow for running a multi-agent team with
+dot_swarm: spawning workers and role agents in tmux, enforcing proof-of-work via
+the inspector role, and merging completed items back to main.</p>
+
+<hr />
+
+<h2 id="prerequisites">Prerequisites</h2>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>pip <span class="nb">install </span>dot-swarm
+brew <span class="nb">install </span>tmux              <span class="c"># tmux 3.0+ required for swarm spawn</span>
+</code></pre></div></div>
+
+<p>Plus one or more agent CLIs on your PATH:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Agent</th>
+      <th>Install</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>opencode</td>
+      <td><a href="https://opencode.ai">opencode.ai</a></td>
+    </tr>
+    <tr>
+      <td>claude</td>
+      <td><a href="https://claude.ai/code">claude.ai/code</a></td>
+    </tr>
+    <tr>
+      <td>ollama</td>
+      <td><a href="https://ollama.com">ollama.com</a> — then <code class="language-plaintext highlighter-rouge">ollama pull llama3.2</code></td>
+    </tr>
+    <tr>
+      <td>bedrock</td>
+      <td><code class="language-plaintext highlighter-rouge">pip install 'dot-swarm[ai]'</code> + AWS credentials</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<h2 id="step-1-initialise-the-swarm">Step 1: Initialise the swarm</h2>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">cd </span>your-repo
+swarm init                    <span class="c"># creates .swarm/, generates signing identity</span>
+swarm crawl                   <span class="c"># populate context.md with directory structure</span>
+swarm add <span class="s2">"Implement OAuth2 login"</span> <span class="nt">--priority</span> high
+swarm add <span class="s2">"Add rate limiting to API"</span> <span class="nt">--depends</span> AUTH-001
+swarm ready                   <span class="c"># confirm AUTH-001 is unblocked, AUTH-002 is not</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="step-2-enable-the-inspector-role">Step 2: Enable the inspector role</h2>
+
+<p>The inspector role adds a proof-of-work gate — workers can’t call <code class="language-plaintext highlighter-rouge">swarm done</code>
+until they’ve attached evidence and an inspector has verified it.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm role <span class="nb">enable </span>inspector <span class="se">\</span>
+  <span class="nt">--max-iterations</span> 3 <span class="se">\</span>
+  <span class="nt">--require-proof</span> <span class="s2">"branch,commit,tests"</span>
+</code></pre></div></div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Option</th>
+      <th>Meaning</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">--max-iterations 3</code></td>
+      <td>Auto-BLOCK item after 3 consecutive failures</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">--require-proof "branch,commit,tests"</code></td>
+      <td>Worker must supply all three fields</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<h2 id="step-3-spawn-a-worker">Step 3: Spawn a worker</h2>
+
+<p><code class="language-plaintext highlighter-rouge">swarm spawn</code> opens a named tmux window, sets the <code class="language-plaintext highlighter-rouge">SWARM_*</code> environment variables,
+and auto-claims the item.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm spawn AUTH-001 <span class="nt">--agent</span> opencode
+</code></pre></div></div>
+
+<p>What happens under the hood:</p>
+
+<ol>
+  <li>A tmux session named <code class="language-plaintext highlighter-rouge">swarm</code> is created (or reused)</li>
+  <li>A window named <code class="language-plaintext highlighter-rouge">AUTH-001</code> is opened with <code class="language-plaintext highlighter-rouge">opencode</code> running inside it</li>
+  <li>Three env vars are set before opencode starts:</li>
+</ol>
+
+<table>
+  <thead>
+    <tr>
+      <th>Variable</th>
+      <th>Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">SWARM_AGENT_ID</code></td>
+      <td>e.g. <code class="language-plaintext highlighter-rouge">spawn-AUTH-001-143022</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">SWARM_ITEM_ID</code></td>
+      <td><code class="language-plaintext highlighter-rouge">AUTH-001</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">SWARM_ROLE</code></td>
+      <td><code class="language-plaintext highlighter-rouge">worker</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<ol>
+  <li>The item is claimed: <code class="language-plaintext highlighter-rouge">AUTH-001</code> moves from Pending → Active in <code class="language-plaintext highlighter-rouge">queue.md</code></li>
+</ol>
+
+<p><strong>Attach to the worker window:</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>tmux attach <span class="nt">-t</span> swarm              <span class="c"># attach to session</span>
+<span class="c"># Ctrl-b + n                      # cycle windows</span>
+<span class="c"># Ctrl-b + s                      # session picker</span>
+</code></pre></div></div>
+
+<p><strong>Worker options:</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm spawn AUTH-001 <span class="nt">--agent</span> claude      <span class="c"># use Claude Code instead</span>
+swarm spawn AUTH-001 <span class="nt">--agent</span> ollama      <span class="c"># use local Ollama model</span>
+swarm spawn AUTH-001 <span class="nt">--no-claim</span>          <span class="c"># open window without claiming</span>
+swarm spawn AUTH-001 <span class="nt">--session</span> oauth     <span class="c"># custom tmux session name</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="step-4-worker-does-the-work">Step 4: Worker does the work</h2>
+
+<p>Inside the worker’s tmux window, the agent reads <code class="language-plaintext highlighter-rouge">BOOTSTRAP.md</code> and <code class="language-plaintext highlighter-rouge">context.md</code>
+automatically (if using opencode or Claude Code with MCP configured). It works the
+task, runs tests, pushes a branch.</p>
+
+<p>When finished, the worker attaches proof instead of calling <code class="language-plaintext highlighter-rouge">swarm done</code>:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm partial AUTH-001 <span class="se">\</span>
+  <span class="nt">--proof</span> <span class="s2">"branch:feature/oauth2 commit:abc1234 tests:42/42 pr:47"</span>
+</code></pre></div></div>
+
+<p>The <code class="language-plaintext highlighter-rouge">proof:</code> field is stored inline in <code class="language-plaintext highlighter-rouge">queue.md</code> and validated against the
+<code class="language-plaintext highlighter-rouge">require-proof</code> fields set during <code class="language-plaintext highlighter-rouge">swarm role enable</code>. Missing required fields
+produce a warning but don’t block the command.</p>
+
+<p><strong>Common proof fields:</strong></p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Field</th>
+      <th>Example</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">branch</code></td>
+      <td><code class="language-plaintext highlighter-rouge">branch:feature/oauth2</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">commit</code></td>
+      <td><code class="language-plaintext highlighter-rouge">commit:abc1234</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">tests</code></td>
+      <td><code class="language-plaintext highlighter-rouge">tests:42/42</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">pr</code></td>
+      <td><code class="language-plaintext highlighter-rouge">pr:47</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">diff</code></td>
+      <td><code class="language-plaintext highlighter-rouge">diff:+187/-23</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<h2 id="step-5-spawn-an-inspector">Step 5: Spawn an inspector</h2>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm spawn <span class="nt">--role</span> inspector
+</code></pre></div></div>
+
+<p>This opens a second tmux window named <code class="language-plaintext highlighter-rouge">inspector</code> with <code class="language-plaintext highlighter-rouge">SWARM_ROLE=inspector</code>.
+The inspector agent (or a human) reviews the proof and approves or rejects:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Approve — item moves to Done, signed in trail.log</span>
+swarm inspect AUTH-001 <span class="nt">--pass</span>
+swarm inspect AUTH-001 <span class="nt">--pass</span> <span class="nt">--note</span> <span class="s2">"Tests green, code reviewed, PR #47 approved"</span>
+
+<span class="c"># Reject — item returns to Open, proof cleared, inspect_fails incremented</span>
+swarm inspect AUTH-001 <span class="nt">--fail</span> <span class="nt">--reason</span> <span class="s2">"Token refresh edge case not handled — see test_auth.py:142"</span>
+</code></pre></div></div>
+
+<p><strong>On <code class="language-plaintext highlighter-rouge">--fail</code>:</strong> the item is re-opened, proof is cleared, and <code class="language-plaintext highlighter-rouge">inspect_fails</code> is
+incremented. The worker sees it in <code class="language-plaintext highlighter-rouge">swarm ready</code> again and can re-claim it.</p>
+
+<p><strong>On exhaust:</strong> if <code class="language-plaintext highlighter-rouge">inspect_fails</code> reaches <code class="language-plaintext highlighter-rouge">max-iterations</code>, the item is
+auto-BLOCKed with a clear message:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Max retries exhausted: [AUTH-001] is now BLOCKED (3/3 fails).
+  Use 'swarm unblock --reclaim' to manually reassign, or 'swarm done --force' to override.
+</code></pre></div></div>
+
+<p>Blocked items surface immediately in <code class="language-plaintext highlighter-rouge">swarm audit --full</code> and <code class="language-plaintext highlighter-rouge">swarm status</code>.</p>
+
+<hr />
+
+<h2 id="step-6-supervisor-overview-optional">Step 6: Supervisor overview (optional)</h2>
+
+<p>A supervisor window gives a human director or orchestrator agent a live view
+across all active work:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm spawn <span class="nt">--role</span> supervisor
+</code></pre></div></div>
+
+<p>Inside the supervisor window:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm explore <span class="nt">--depth</span> 3          <span class="c"># colony heartbeat</span>
+swarm report <span class="nt">--only</span> active       <span class="c"># active items only</span>
+swarm audit <span class="nt">--full</span>               <span class="c"># full health + security pass</span>
+swarm ready                      <span class="c"># what's unblocked right now</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="step-7-merge">Step 7: Merge</h2>
+
+<p>Once <code class="language-plaintext highlighter-rouge">swarm inspect AUTH-001 --pass</code> has run, <code class="language-plaintext highlighter-rouge">AUTH-001</code> is Done and the branch
+is ready to merge. In the worker’s window (or a dedicated merge window):</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>gh <span class="nb">pr </span>merge 47 <span class="nt">--squash</span> <span class="nt">--delete-branch</span>
+</code></pre></div></div>
+
+<p>Then continue: <code class="language-plaintext highlighter-rouge">swarm ready</code> surfaces <code class="language-plaintext highlighter-rouge">AUTH-002</code> (rate limiting), which was
+blocked on <code class="language-plaintext highlighter-rouge">AUTH-001</code>. Spawn a worker for it and repeat.</p>
+
+<hr />
+
+<h2 id="human-override">Human override</h2>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm <span class="k">done </span>AUTH-001 <span class="nt">--force</span>      <span class="c"># skip inspector gate entirely (human director only)</span>
+swarm unblock AUTH-001 <span class="nt">--reclaim</span> <span class="c"># re-open a BLOCKED item for a fresh worker</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="full-example-session">Full example session</h2>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># ── Terminal 1: setup ────────────────────────────────────────────────</span>
+swarm init <span class="nt">--crawl</span>
+swarm role <span class="nb">enable </span>inspector <span class="nt">--max-iterations</span> 3 <span class="nt">--require-proof</span> <span class="s2">"branch,commit,tests"</span>
+swarm add <span class="s2">"Implement OAuth2 login"</span> <span class="nt">--priority</span> high
+swarm add <span class="s2">"Add rate limiting"</span> <span class="nt">--depends</span> AUTH-001
+
+<span class="c"># ── Spawn workers ────────────────────────────────────────────────────</span>
+swarm spawn AUTH-001 <span class="nt">--agent</span> opencode      <span class="c"># worker window: AUTH-001</span>
+swarm spawn <span class="nt">--role</span> inspector               <span class="c"># inspector window</span>
+swarm spawn <span class="nt">--role</span> supervisor              <span class="c"># supervisor window</span>
+
+<span class="c"># ── Inside AUTH-001 worker window (opencode) ─────────────────────────</span>
+<span class="c"># ... implement, test, push branch ...</span>
+swarm partial AUTH-001 <span class="nt">--proof</span> <span class="s2">"branch:feature/oauth2 commit:abc1234 tests:42/42 pr:47"</span>
+
+<span class="c"># ── Inside inspector window ──────────────────────────────────────────</span>
+swarm inspect AUTH-001 <span class="nt">--pass</span> <span class="nt">--note</span> <span class="s2">"All good, merging"</span>
+
+<span class="c"># ── Back in Terminal 1 ───────────────────────────────────────────────</span>
+gh <span class="nb">pr </span>merge 47 <span class="nt">--squash</span> <span class="nt">--delete-branch</span>
+swarm ready         <span class="c"># AUTH-002 now unblocked</span>
+swarm spawn AUTH-002 <span class="nt">--agent</span> opencode
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="environment-variables-reference">Environment variables reference</h2>
+
+<p>These are set automatically by <code class="language-plaintext highlighter-rouge">swarm spawn</code> in each tmux window:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Variable</th>
+      <th>Set by</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">SWARM_AGENT_ID</code></td>
+      <td><code class="language-plaintext highlighter-rouge">swarm spawn</code></td>
+      <td>Unique agent identifier for this window</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">SWARM_ITEM_ID</code></td>
+      <td><code class="language-plaintext highlighter-rouge">swarm spawn &lt;id&gt;</code></td>
+      <td>The item being worked</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">SWARM_ROLE</code></td>
+      <td><code class="language-plaintext highlighter-rouge">swarm spawn --role</code></td>
+      <td><code class="language-plaintext highlighter-rouge">worker</code>, <code class="language-plaintext highlighter-rouge">inspector</code>, <code class="language-plaintext highlighter-rouge">supervisor</code>, or <code class="language-plaintext highlighter-rouge">watchdog</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Any <code class="language-plaintext highlighter-rouge">swarm</code> command that accepts <code class="language-plaintext highlighter-rouge">--agent</code> will default to <code class="language-plaintext highlighter-rouge">$SWARM_AGENT_ID</code> if set.</p>
+
+<hr />
+
+<h2 id="which-ai-backend-to-use">Which AI backend to use?</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Backend</th>
+      <th>Best for</th>
+      <th>Setup</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">opencode</code></td>
+      <td>Full agentic coding (reads files, runs tests)</td>
+      <td><code class="language-plaintext highlighter-rouge">npm i -g opencode</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">claude</code></td>
+      <td>Claude Code interactive sessions</td>
+      <td><code class="language-plaintext highlighter-rouge">npm i -g @anthropic-ai/claude-code</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">ollama</code></td>
+      <td>Local/private models, no API keys</td>
+      <td><code class="language-plaintext highlighter-rouge">brew install ollama &amp;&amp; ollama pull llama3.2</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">bedrock</code></td>
+      <td>AWS-native teams</td>
+      <td><code class="language-plaintext highlighter-rouge">pip install 'dot-swarm[ai]'</code> + AWS creds</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Configure the default with <code class="language-plaintext highlighter-rouge">swarm configure</code>, or override per-command with <code class="language-plaintext highlighter-rouge">--via</code>:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm ai <span class="s2">"what should I work on?"</span> <span class="nt">--via</span> ollama
+swarm ai <span class="s2">"mark AUTH-001 done"</span> <span class="nt">--via</span> bedrock
+</code></pre></div></div>
