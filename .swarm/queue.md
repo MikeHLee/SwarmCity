@@ -410,7 +410,7 @@ Item IDs: `SWC-<3-digit-number>` — assigned sequentially, never reused.
       notes: Integrate with ~/Documents/Runes/oasis-x/oasis-cloud/src/data.
              Make dot_swarm the source of truth for both AI and human task tracking.
 
-- [ ] [SWC-044] [OPEN] Fix Docs Website (Jekyll rendering issue)
+- [x] [SWC-044] [DONE · 2026-04-20] Fix Docs Website (Jekyll rendering issue)
       project: docs
       priority: high
       notes: Website is currently falling back to a raw README clone.
