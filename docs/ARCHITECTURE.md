@@ -1,6 +1,6 @@
 ---
 title: Architecture
-nav_order: 5
+nav_order: 6
 ---
 
 # dot_swarm — Implementation Bible

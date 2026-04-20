@@ -260,10 +260,56 @@ and where no single agent should be a required coordinator.
 
 ## Security Model
 
-Every `swarm init` generates a per-swarm HMAC-SHA256 signing identity. All AI
-operations are signed and recorded in `trail.log`. `swarm audit --security` and
-`swarm heal` scan for 18 adversarial content patterns across three severity levels
-(CRITICAL / HIGH / MEDIUM) in all `.swarm/` files and platform shims.
+### What protects your swarm
+
+**Cryptographic identity.** Every `swarm init` generates a per-swarm HMAC-SHA256
+signing identity stored in `.swarm/.signing_key` (gitignored). All AI operations are
+signed and appended to `trail.log`, creating a tamper-evident audit chain.
+
+**Adversarial content scanning.** `swarm heal` and `swarm audit --security` scan all
+`.swarm/` files and platform shims (CLAUDE.md, .cursorrules, etc.) for 18 patterns
+across three severity levels:
+
+| Level | Examples |
+|-------|---------|
+| CRITICAL | instructions to exfiltrate data, override safety rules, impersonate agents |
+| HIGH | prompt injection in memory/context files, fake claim stamps |
+| MEDIUM | ambiguous authority claims, unusual base64-encoded content |
+
+**Drift detection.** `swarm audit --drift` flags any `.swarm/` file whose content
+diverges from the signed trail — the earliest signal that an agent has written
+something outside the normal protocol flow.
+
+**Trail visibility control.** `swarm trail invisible` (the default on `swarm init`)
+adds `.swarm/` to `.gitignore` so your coordination history doesn't leak when you
+push code. Run `swarm trail visible` only when you want to share the trail explicitly.
+
+### Known attack surface
+
+**Shared medium poisoning.** The `.swarm/` directory is the coordination medium — a
+malicious agent that can write to it can influence every other agent that reads it.
+This is the fundamental tradeoff of any stigmergic system. Mitigations: adversarial
+scanner, signed trail, `swarm heal` as a continuous integrity pass.
+
+**HMAC is local-trust only.** The signing key is per-swarm and never shared. This
+protects trail integrity within a swarm but provides no cross-swarm authentication.
+An Ed25519 upgrade path is documented; HMAC was chosen for zero-dependency stdlib
+compatibility.
+
+**Trail sharing equals history sharing.** If you run `swarm trail visible` and push,
+your full coordination history — every claim, handoff note, and memory entry — goes
+with it. The default is invisible for this reason.
+
+**Live federation is not yet implemented.** Cross-swarm coordination currently works
+via file-based OGP-lite signed messages, not live network connections. Real-time
+inter-swarm signaling is planned if the userbase warrants it.
+
+**LLM content is a trust boundary.** Content written by an LLM into `memory.md` or
+`notes:` fields can influence future agents that read those files. The adversarial
+scanner reduces but does not eliminate this risk — novel injection patterns may evade
+static rules. Treat `swarm heal` as a necessary hygiene step after any agentic run.
+
+See [CLI Reference → Security & Trust Model](https://oasis-main.github.io/dot_swarm/CLI_REFERENCE) for full command reference.
 
 ---
 
