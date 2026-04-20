@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Resolve index.md symlink
-        run: rm docs/index.md && cp README.md docs/index.md
+        run: rm docs/index.md && { printf -- '---\n---\n'; cat README.md; } > docs/index.md
 
       - uses: ruby/setup-ruby@v1
         with:
