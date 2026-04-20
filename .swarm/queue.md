@@ -401,3 +401,23 @@ Item IDs: `SWC-<3-digit-number>` — assigned sequentially, never reused.
       Updated install docs (swarm-city → dot-swarm), versions (0.2.0 → 0.3.0), publish workflow
       Commit: 7953ea2
       project: distribution
+
+<!-- ═══════════════ v1.0 RELEASE TARGETS ═══════════════ -->
+
+- [ ] [SWC-043] [OPEN] Integrate dot_swarm into human todo lists (oasis-x)
+      project: integration
+      priority: high
+      notes: Integrate with ~/Documents/Runes/oasis-x/oasis-cloud/src/data.
+             Make dot_swarm the source of truth for both AI and human task tracking.
+
+- [ ] [SWC-044] [OPEN] Fix Docs Website (Jekyll rendering issue)
+      project: docs
+      priority: high
+      notes: Website is currently falling back to a raw README clone.
+             Fix Jekyll rendering to properly build index.html from index.md.
+
+- [ ] [SWC-045] [OPEN] v1.0 Readiness Audit: API Stability + Migration Tooling
+      project: release
+      priority: high
+      notes: Ensure stable v0-to-v1 migration path (detect/migrate .swarm/).
+             Validate final API surface.
