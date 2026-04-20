@@ -69,9 +69,11 @@ def cli(ctx: click.Context, path: str) -> None:
               help="Override level detection (org|div)")
 @click.option("--division-code", default=None, help="Division code e.g. CLD, FW")
 @click.option("--division-name", default=None, help="Human-readable division name")
+@click.option("--visible", is_flag=True, default=False,
+              help="Make .swarm/ visible in git (default: invisible)")
 @click.pass_context
 def init(ctx: click.Context, level: str | None, division_code: str | None,
-         division_name: str | None) -> None:
+         division_name: str | None, visible: bool) -> None:
     """Initialize .swarm/ in the current directory.
 
     Creates BOOTSTRAP.md, context.md, state.md, queue.md, memory.md
@@ -172,6 +174,14 @@ def init(ctx: click.Context, level: str | None, division_code: str | None,
     _ensure_gitignore(swarm_dir)
 
     click.echo(f"Created .swarm/ with {len(list(swarm_dir.iterdir()))} files/dirs.")
+
+    # Trail visibility (default: invisible)
+    gi = _repo_gitignore(p)
+    if gi is not None and not visible:
+        result = _set_trail_visibility(gi, invisible=True)
+        click.echo(f"Trail: {result}  (use 'swarm trail visible' to share)")
+    elif gi is not None and visible:
+        click.echo("Trail: visible — .swarm/ will be committed with the repo.")
 
     if is_div:
         _create_platform_shims(p)
@@ -2104,6 +2114,128 @@ def crawl(ctx: click.Context, depth: int, create_items: bool, dry_run: bool) -> 
 
     if not dry_run and uncatalogued:
         click.echo("\nRun 'swarm heal' to verify context alignment after cataloging.")
+
+
+# ---------------------------------------------------------------------------
+# swarm trail — gitignore-based visibility toggle
+# ---------------------------------------------------------------------------
+
+def _repo_gitignore(start: Path) -> Path | None:
+    """Return the .gitignore at the nearest git root, or None."""
+    p = start.resolve()
+    for _ in range(8):
+        if (p / ".git").is_dir():
+            return p / ".gitignore"
+        if p.parent == p:
+            break
+        p = p.parent
+    return None
+
+
+def _trail_is_invisible(gitignore: Path) -> bool:
+    if not gitignore.exists():
+        return False
+    lines = [l.strip() for l in gitignore.read_text().splitlines()]
+    return ".swarm/" in lines or ".swarm" in lines
+
+
+def _set_trail_visibility(gitignore: Path, invisible: bool) -> str:
+    """Add or remove .swarm/ from .gitignore. Returns a human-readable action."""
+    lines: list[str] = []
+    if gitignore.exists():
+        lines = gitignore.read_text().splitlines()
+
+    entries = {".swarm/", ".swarm"}
+    if invisible:
+        if any(l.strip() in entries for l in lines):
+            return "already invisible"
+        lines.append("")
+        lines.append("# dot_swarm trail — remove to make visible (swarm trail visible)")
+        lines.append(".swarm/")
+        gitignore.write_text("\n".join(lines) + "\n")
+        return "trail hidden (.swarm/ added to .gitignore)"
+    else:
+        new_lines = []
+        removed = False
+        skip_next_comment = False
+        for line in lines:
+            stripped = line.strip()
+            if stripped == "# dot_swarm trail — remove to make visible (swarm trail visible)":
+                skip_next_comment = True
+                continue
+            if skip_next_comment and stripped in entries:
+                removed = True
+                skip_next_comment = False
+                continue
+            if stripped in entries:
+                removed = True
+                continue
+            skip_next_comment = False
+            new_lines.append(line)
+        if not removed:
+            return "already visible (no .swarm/ entry found)"
+        gitignore.write_text("\n".join(new_lines) + "\n")
+        return "trail visible (.swarm/ removed from .gitignore)"
+
+
+@cli.group(name="trail")
+@click.pass_context
+def trail(ctx: click.Context) -> None:
+    """Manage .swarm/ trail visibility in git.
+
+    The trail is invisible by default — your swarm state stays private
+    unless you explicitly share it.
+
+    \b
+    swarm trail status     show current visibility
+    swarm trail invisible  hide .swarm/ from git (add to .gitignore)
+    swarm trail visible    share .swarm/ with git (remove from .gitignore)
+    """
+
+
+@trail.command(name="status")
+@click.pass_context
+def trail_status(ctx: click.Context) -> None:
+    """Show whether the .swarm/ trail is visible or hidden in git."""
+    path = Path(ctx.obj["path"]).resolve()
+    gi = _repo_gitignore(path)
+    if gi is None:
+        click.echo("⚠  No git repository found — trail visibility not applicable.")
+        return
+    hidden = _trail_is_invisible(gi)
+    state = "invisible (private)" if hidden else "visible (shared with git)"
+    click.echo(f"Trail: {state}")
+    click.echo(f"  .gitignore: {gi}")
+    if not hidden:
+        click.echo("  Run 'swarm trail invisible' to hide .swarm/ from git.")
+
+
+@trail.command(name="invisible")
+@click.pass_context
+def trail_invisible(ctx: click.Context) -> None:
+    """Hide .swarm/ from git by adding it to .gitignore."""
+    path = Path(ctx.obj["path"]).resolve()
+    gi = _repo_gitignore(path)
+    if gi is None:
+        click.echo("⚠  No git repository found. Create .gitignore manually.", err=True)
+        return
+    result = _set_trail_visibility(gi, invisible=True)
+    click.echo(f"✓ {result}")
+    click.echo("  Your .swarm/ trail will not be committed unless you run 'swarm trail visible'.")
+
+
+@trail.command(name="visible")
+@click.pass_context
+def trail_visible(ctx: click.Context) -> None:
+    """Share .swarm/ with git by removing it from .gitignore."""
+    path = Path(ctx.obj["path"]).resolve()
+    gi = _repo_gitignore(path)
+    if gi is None:
+        click.echo("⚠  No git repository found.", err=True)
+        return
+    result = _set_trail_visibility(gi, invisible=False)
+    click.echo(f"✓ {result}")
+    click.echo("  Run 'git add .swarm/' to stage the trail for your next commit.")
 
 
 # ---------------------------------------------------------------------------

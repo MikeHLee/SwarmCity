@@ -759,6 +759,40 @@ Run 'swarm heal' to verify context alignment after cataloging.
 
 ---
 
+### `swarm trail`
+
+Manage whether `.swarm/` is visible or hidden in git. The trail is **invisible by
+default** — your swarm state stays private unless you explicitly share it.
+
+```bash
+swarm trail status     # show current visibility + .gitignore path
+swarm trail invisible  # hide .swarm/ (adds .swarm/ to .gitignore)
+swarm trail visible    # share .swarm/ (removes .swarm/ from .gitignore)
+```
+
+**Why this matters:** sharing a git repo also shares the full swarm trail — every
+claim, completion, handoff note, and memory entry. `invisible` is the default so
+that decision is always explicit.
+
+**After making visible:**
+```bash
+swarm trail visible
+git add .swarm/
+git commit -m "chore: share swarm trail"
+```
+
+**Security note:** `trail invisible` only affects git tracking. The `.swarm/`
+files remain fully functional locally; the signing key (`.swarm/.signing_key`)
+and quarantine dir are always excluded by `.swarm/.gitignore` regardless of
+trail visibility.
+
+`swarm init` defaults to invisible. Pass `--visible` to opt in at init time:
+```bash
+swarm init --visible   # share trail from the start
+```
+
+---
+
 ### `swarm configure`
 
 Interactive wizard to set your default LLM interface and (if Bedrock) model + region.

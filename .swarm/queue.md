@@ -197,15 +197,13 @@ Item IDs: `SWC-<3-digit-number>` — assigned sequentially, never reused.
 
 <!-- ═══════════════ CLI IMPROVEMENTS ═══════════════ -->
 
-- [ ] [SWC-026] [OPEN] swarm trail visible/invisible — gitignore-based .swarm sharing toggle
+- [x] [SWC-026] [DONE · 2026-04-19] swarm trail visible/invisible — gitignore-based .swarm sharing toggle
       project: cli-core
       priority: high
-      notes: Simple gitignore manipulation. `swarm trail invisible` adds .swarm/ to .gitignore
-             (default on init). `swarm trail visible` removes .swarm/ from .gitignore.
-             `swarm init` should default to invisible (trail private unless opted in).
-             Solves the "sharing source = sharing swarm history" exposure risk.
-             `swarm trail status` reports current visibility + gitignore state.
-             Edge cases: nested .gitignore, already-committed .swarm/ files (warn user).
+      notes: Implemented as `swarm trail` group with status/invisible/visible subcommands.
+             swarm init now defaults to invisible (--visible flag to opt in).
+             _repo_gitignore() walks up to nearest .git root. _set_trail_visibility()
+             adds/removes .swarm/ entry with explanatory comment. Docs: CLI_REFERENCE.md.
 
 - [ ] [SWC-027] [OPEN] Tighten init/crawl/explore coupling
       project: cli-core
