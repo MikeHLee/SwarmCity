@@ -176,6 +176,53 @@ def invoke_via_cli(cli_name: str, user_message: str) -> dict:
     return json.loads(clean.strip())
 
 
+def invoke_via_ollama(host: str, model: str, user_message: str) -> dict:
+    """Call a local Ollama instance and return the parsed JSON response dict.
+
+    Uses urllib (stdlib only — no extra dependency).
+    Ollama must be running: `ollama serve` or the desktop app.
+
+    Raises:
+        ConnectionError: if Ollama is not reachable at host
+        json.JSONDecodeError: if the response is not valid JSON after cleaning
+    """
+    import urllib.request
+    import urllib.error
+
+    payload = json.dumps({
+        "model": model,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user",   "content": user_message},
+        ],
+        "stream": False,
+    }).encode()
+
+    req = urllib.request.Request(
+        f"{host.rstrip('/')}/api/chat",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            raw_body = resp.read().decode()
+    except urllib.error.URLError as e:
+        raise ConnectionError(
+            f"Could not reach Ollama at {host}. "
+            f"Is it running? Start it with: ollama serve\n  ({e})"
+        ) from e
+
+    data = json.loads(raw_body)
+    raw = data.get("message", {}).get("content", "")
+    clean = raw.strip()
+    if clean.startswith("```"):
+        clean = clean.split("\n", 1)[-1]
+    if clean.endswith("```"):
+        clean = clean.rsplit("```", 1)[0]
+    return json.loads(clean.strip())
+
+
 def invoke_ai(client, model: str, user_message: str) -> dict:
     """Call Bedrock converse API and return the parsed JSON response dict.
 

@@ -71,9 +71,11 @@ def cli(ctx: click.Context, path: str) -> None:
 @click.option("--division-name", default=None, help="Human-readable division name")
 @click.option("--visible", is_flag=True, default=False,
               help="Make .swarm/ visible in git (default: invisible)")
+@click.option("--crawl", "run_crawl", is_flag=True, default=False,
+              help="Run 'swarm crawl' immediately after init to populate context.md")
 @click.pass_context
 def init(ctx: click.Context, level: str | None, division_code: str | None,
-         division_name: str | None, visible: bool) -> None:
+         division_name: str | None, visible: bool, run_crawl: bool) -> None:
     """Initialize .swarm/ in the current directory.
 
     Creates BOOTSTRAP.md, context.md, state.md, queue.md, memory.md
@@ -187,12 +189,27 @@ def init(ctx: click.Context, level: str | None, division_code: str | None,
         _create_platform_shims(p)
         _install_drift_check_workflow(p)
 
+    if run_crawl:
+        click.echo("\nRunning swarm crawl...")
+        paths = SwarmPaths.find(str(p))
+        if paths:
+            findings = crawl_directory(paths, p, depth=3, create_items=False, dry_run=False)
+            uncatalogued = [f for f in findings if f["type"] == "uncatalogued"]
+            divisions = [f for f in findings if f["type"] == "swarm_division"]
+            if divisions:
+                click.echo(f"  Swarm divisions found ({len(divisions)}) — skipped")
+            if uncatalogued:
+                click.echo(f"  Catalogued {len(uncatalogued)} dirs → context.md")
+            else:
+                click.echo("  No uncatalogued directories found.")
+
     click.echo("\nNext steps:")
     click.echo(f"  1. Edit .swarm/context.md — describe what {name} is")
-    click.echo("  2. Run 'swarm status' to verify")
-    click.echo("  3. Run 'swarm add \"first task\"' to add a work item")
+    click.echo("  2. Run 'swarm crawl' to catalogue subdirectories into context.md")
+    click.echo("  3. Run 'swarm status' to verify")
+    click.echo("  4. Run 'swarm add \"first task\"' to add a work item")
     if is_div:
-        click.echo("  4. Add GEMINI_API_KEY to GitHub secrets to enable drift checks")
+        click.echo("  5. Add GEMINI_API_KEY to GitHub secrets to enable drift checks")
 
 
 # ---------------------------------------------------------------------------
@@ -567,43 +584,48 @@ def explore(ctx: click.Context, depth: int) -> None:
         return
 
     # Header
-    click.echo(f"{'Division':20} | {'Last Touched':18} | {'Current Focus'}")
-    click.echo(f"{'─' * 20}─┼─{'─' * 18}─┼─{'─' * 40}")
+    click.echo(f"{'Division':20} | {'C':1} | {'Last Touched':18} | {'Current Focus'}")
+    click.echo(f"{'─' * 20}─┼─{'─'}─┼─{'─' * 18}─┼─{'─' * 40}")
 
     for path, paths in divisions:
         try:
             state = read_state(paths)
             active, pending, _ = read_queue(paths)
-            
-            # Formatting
+
             name = path.name
             if paths.is_org_level():
                 name = f"★ {name}"
-            
+
             lt = state.get("Last touched", "unknown")
-            # Extract just the date/time part for brevity
             lt_short = lt.split(" by ")[0].replace("T", " ").split(".")[0][:16]
-            
+
             focus = state.get("Current focus", "(not set)")
             if len(focus) > 50:
                 focus = focus[:47] + "..."
-            
-            # Health indicator
-            health = "✓"
-            if "**" in focus or "(not set)" in focus:
-                health = "?"
-            
-            # Add pending count
-            count = f"({len(active)} active, {len(pending)} pending)"
-            
-            click.echo(f"{name:20} | {lt_short:18} | {focus}")
-            if active or pending:
-                click.echo(f"{' ':20} | {' ':18} |   └─ {count}")
-                
-        except Exception as e:
-            click.echo(f"{path.name:20} | Error: {str(e)[:50]}")
 
-    click.echo(f"\nFound {len(divisions)} divisions.")
+            # Crawl coverage: context.md contains a Directory Map?
+            crawled = "✓" if paths.context.exists() and "## Directory Map" in paths.context.read_text() else "·"
+
+            count = f"({len(active)} active, {len(pending)} pending)"
+
+            click.echo(f"{name:20} | {crawled} | {lt_short:18} | {focus}")
+            if active or pending:
+                click.echo(f"{' ':20} | {' ':1} | {' ':18} |   └─ {count}")
+
+        except Exception as e:
+            click.echo(f"{path.name:20} | ? | Error: {str(e)[:50]}")
+
+    # Detect uninitialised sibling git repos
+    uninitialised = [
+        d for d in root_path.iterdir()
+        if d.is_dir() and (d / ".git").is_dir() and not (d / ".swarm").is_dir()
+    ]
+    if uninitialised:
+        click.echo(f"\n  ⚠  Uninitialised repos ({len(uninitialised)}) — no .swarm/ found:")
+        for d in uninitialised:
+            click.echo(f"    {d.name}/  →  cd {d.name} && swarm init")
+
+    click.echo(f"\nFound {len(divisions)} divisions.  C = crawled (swarm crawl run)")
     click.echo("Run 'swarm status --path <division>' for deep dive into any node.\n")
 
 
@@ -2112,6 +2134,16 @@ def crawl(ctx: click.Context, depth: int, create_items: bool, dry_run: bool) -> 
     else:
         click.echo("  No uncatalogued directories found.")
 
+    # Detect sibling git repos that haven't been initialised yet
+    uninitialised = [
+        d for d in root.iterdir()
+        if d.is_dir() and (d / ".git").is_dir() and not (d / ".swarm").is_dir()
+    ]
+    if uninitialised:
+        click.echo(f"\n  ⚠  Uninitialised git repos ({len(uninitialised)}) — no .swarm/ found:")
+        for d in uninitialised:
+            click.echo(f"    {d.name}/  →  cd {d.name} && swarm init")
+
     if not dry_run and uncatalogued:
         click.echo("\nRun 'swarm heal' to verify context alignment after cataloging.")
 
@@ -2257,13 +2289,12 @@ def configure() -> None:
     """
     from . import bedrock as _bedrock
 
-    _INTERFACES = ["bedrock", "claude", "gemini", "opencode"]
-    _DETECTED   = [i for i in ["claude", "gemini", "opencode"] if shutil.which(i)]
+    _INTERFACES = ["bedrock", "ollama", "claude", "gemini", "opencode"]
 
     click.echo("dot_swarm AI interface configuration\n")
     click.echo("Available interfaces:")
     for iface in _INTERFACES:
-        detected = " (detected)" if shutil.which(iface) or iface == "bedrock" else ""
+        detected = " (detected)" if shutil.which(iface) or iface in ("bedrock", "ollama") else ""
         click.echo(f"  {iface}{detected}")
     click.echo()
 
@@ -2272,7 +2303,25 @@ def configure() -> None:
     interface = click.prompt("  Default interface", default=current,
                              type=click.Choice(_INTERFACES))
 
-    if interface == "bedrock":
+    if interface == "ollama":
+        host  = click.prompt("  Ollama host",  default=cfg.get("ollama_host",  _bedrock.DEFAULT_OLLAMA_HOST))
+        model = click.prompt("  Ollama model", default=cfg.get("ollama_model", _bedrock.DEFAULT_OLLAMA_MODEL))
+
+        if click.confirm("\n  Test connectivity now?", default=True):
+            click.echo("  Connecting...", nl=False)
+            try:
+                import urllib.request
+                urllib.request.urlopen(f"{host.rstrip('/')}/api/tags", timeout=5)
+                click.echo(" ✓ OK")
+            except Exception as e:
+                click.echo(f" ✗\n  Could not reach Ollama at {host}.")
+                click.echo("  Make sure Ollama is running: ollama serve")
+                click.echo(f"  Pull a model first:          ollama pull {model}")
+
+        _bedrock.save_config(cfg["model"], cfg["region"], interface=interface,
+                             ollama_host=host, ollama_model=model)
+
+    elif interface == "bedrock":
         try:
             import boto3  # noqa: F401
         except ImportError:
@@ -2339,7 +2388,7 @@ def configure() -> None:
 @click.option("--agent", "agent_id", default=None, help="Agent ID override")
 @click.option("--limit", "context_limit", default=1200, help="Approx token limit for context bundle (default: 1200)")
 @click.option("--via", "interface", default=None,
-              type=click.Choice(["bedrock", "claude", "gemini", "opencode"]),
+              type=click.Choice(["bedrock", "ollama", "claude", "gemini", "opencode"]),
               help="LLM backend to use (default: from swarm configure, or bedrock)")
 @click.option("--chain", is_flag=True, default=False,
               help="Auto-chain: keep invoking AI until no more write operations are proposed")
@@ -2383,6 +2432,12 @@ def ai_cmd(ctx: click.Context, instruction: str, yes: bool, agent_id: str | None
                 raise SystemExit(1)
             client = _bedrock.get_bedrock_client(cfg["region"])
             return _ai.invoke_ai(client, cfg["model"], user_msg)
+        if resolved == "ollama":
+            return _ai.invoke_via_ollama(
+                cfg.get("ollama_host",  _bedrock.DEFAULT_OLLAMA_HOST),
+                cfg.get("ollama_model", _bedrock.DEFAULT_OLLAMA_MODEL),
+                user_msg,
+            )
         return _ai.invoke_via_cli(resolved, user_msg)
 
     step = 0
