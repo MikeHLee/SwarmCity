@@ -205,7 +205,7 @@ Item IDs: `SWC-<3-digit-number>` — assigned sequentially, never reused.
              _repo_gitignore() walks up to nearest .git root. _set_trail_visibility()
              adds/removes .swarm/ entry with explanatory comment. Docs: CLI_REFERENCE.md.
 
-- [ ] [SWC-027] [OPEN] Tighten init/crawl/explore coupling
+- [x] [SWC-027] [DONE · 2026-04-19] Tighten init/crawl/explore coupling
       project: cli-core
       priority: medium
       notes: No redundancy to remove — init creates blank .swarm/, crawl populates context.md
@@ -215,7 +215,7 @@ Item IDs: `SWC-<3-digit-number>` — assigned sequentially, never reused.
              - swarm explore should surface crawl coverage (which dirs have been catalogued)
              Goal: init → crawl → explore forms a coherent onboarding arc.
 
-- [ ] [SWC-028] [OPEN] Ollama AI backend integration (alongside Bedrock)
+- [x] [SWC-028] [DONE · 2026-04-19] Ollama AI backend integration (alongside Bedrock)
       project: ai-features
       priority: high
       notes: swarm spawn --agent ollama already launches ollama in tmux as a worker tool,
@@ -227,7 +227,7 @@ Item IDs: `SWC-<3-digit-number>` — assigned sequentially, never reused.
              Provider abstraction: unify under AbstractAIBackend so swarm ai works
              identically regardless of backend.
 
-- [ ] [SWC-029] [OPEN] Document opencode+tmux multi-agent workflow end-to-end
+- [x] [SWC-029] [DONE · 2026-04-19] Document opencode+tmux multi-agent workflow end-to-end
       project: docs
       priority: high
       notes: Full spawn→claim→implement→proof→inspect→merge flow is implemented but
@@ -245,7 +245,7 @@ Item IDs: `SWC-<3-digit-number>` — assigned sequentially, never reused.
              "pi agentic" refers to — Raspberry Pi edge deployment? pi.ai terminal agent?
              Other? — pending user clarification before scoping.)
 
-- [ ] [SWC-030] [OPEN] README + docs: security section overhaul with benefits AND vulnerabilities
+- [x] [SWC-030] [DONE · 2026-04-19] README + docs: security section overhaul with benefits AND vulnerabilities
       project: docs
       priority: high
       notes: Current security section is thin. Expand with:
@@ -264,17 +264,18 @@ Item IDs: `SWC-<3-digit-number>` — assigned sequentially, never reused.
              Add FUTURE: live networked federation across swarms (planned if userbase
              warrants it). Existing gitignore toggle (SWC-026) as the near-term fix.
 
-- [ ] [SWC-031] [OPEN] Replace oasis-x specific examples in docs with rich generic examples
+- [x] [SWC-031] [DONE] Replace oasis-x specific examples in docs with rich generic examples
       project: docs
       priority: medium
-      notes: Current docs use oasis-x division structure and internal project names as
-             examples. Replace with two sets of generic examples:
-             BUSINESS: multi-service SaaS org (api-service, auth-service, dashboard)
-               with realistic cross-division work items, federation messages, audit trails.
-             PERSONAL: solo developer managing multiple projects (side-project, dotfiles,
-               homelab) using dot_swarm for personal task and context management.
-             Also: move oasis-x operating structure info OUT of docs and INTO the
-             oasis-x .swarm directory (see SWC-032).
+      completed: 2026-04-19
+      notes: docs/index.md + README.md: claim pattern block → API-042/043/041 (rate limiter,
+             distributed tracing, auth middleware migration); quick start → API-001; spawn
+             examples → API-042 with rate-limiter-specific proof strings.
+             docs/CLI_REFERENCE.md: global options path → api-service; all CLD-*/SWC-* work
+             item IDs → API-*; schedule/workflow triggers → API-041/042/043; workflow name →
+             rate-limiter-rollout; inspect examples → API-042; spawn window → API-042;
+             crawl output → api-service/services/auth/services/payments; Item ID Convention
+             table → generic SaaS divisions (API/AUTH/DASH/MOB/FW/DOC/INF/LAB/SWC).
 
 - [ ] [SWC-032] [OPEN] Move collaboration/integration notes from docs into .swarm trail; make invisible
       project: docs

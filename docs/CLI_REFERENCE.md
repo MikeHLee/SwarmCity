@@ -22,7 +22,7 @@ pip install 'dot-swarm[ai]'     # + AWS Bedrock support (boto3)
 | `--version` | — | Print version and exit |
 | `--help` | — | Show help |
 
-All commands inherit `--path`. Example: `swarm --path ../oasis-cloud status`
+All commands inherit `--path`. Example: `swarm --path ../api-service status`
 
 ---
 
@@ -119,7 +119,7 @@ swarm add "OAuth2 discovery" --notes "See RFC 8414 for discovery spec"
 swarm add "Add request ID tracing to all services"
 swarm add "Fix Redis timeout" --priority high --project infra
 swarm add "OAuth2 discovery" --notes "See RFC 8414 for discovery spec"
-swarm add "Run integration tests" --depends CLD-042,CLD-043
+swarm add "Run integration tests" --depends API-042,API-043
 swarm add "Implement rate limiter" --max-retries 5  # override inspector retry limit for this task
 ```
 
@@ -136,8 +136,8 @@ inherit the inspector role's `max_iterations` setting.
 Claim an item (move Active, stamp with agent ID + timestamp).
 
 ```bash
-swarm claim CLD-042
-swarm claim CLD-042 --agent my-agent-id
+swarm claim API-042
+swarm claim API-042 --agent my-agent-id
 ```
 
 ### `swarm done`
@@ -145,9 +145,9 @@ swarm claim CLD-042 --agent my-agent-id
 Mark a claimed item as done.
 
 ```bash
-swarm done CLD-042
-swarm done CLD-042 --note "Used converse API instead of invoke-model"
-swarm done CLD-042 --next "Pick up CLD-043 next"   # update state.md focus
+swarm done API-042
+swarm done API-042 --note "Fixed by switching to sliding window counter"
+swarm done API-042 --next "Pick up API-043 next"   # update state.md focus
 ```
 
 {: .warning }
@@ -157,7 +157,7 @@ swarm done CLD-042 --next "Pick up CLD-043 next"   # update state.md focus
 > as a human director.
 
 ```bash
-swarm done CLD-042 --force    # human director override
+swarm done API-042 --force    # human director override
 ```
 
 ### `swarm partial`
@@ -166,13 +166,13 @@ Checkpoint progress on a claimed item without marking it done. Updates the item'
 in-progress note and refreshes the claim timestamp.
 
 ```bash
-swarm partial CLD-042 --note "Auth header parsing done, token validation next"
+swarm partial API-042 --note "Counter logic done, eviction policy next"
 ```
 
 **With proof (required when inspector role is enabled):**
 
 ```bash
-swarm partial CLD-042 --proof "branch:feature/oauth2 commit:abc1234 tests:42/42"
+swarm partial API-042 --proof "branch:feature/rate-limiter commit:abc1234 tests:87/87"
 ```
 
 The `--proof` value is a space-separated list of `key:value` pairs. Required fields
@@ -187,7 +187,7 @@ See [Agent Roles → Inspector](ROLES.md#inspector) for the full proof workflow.
 Mark a claimed item as blocked.
 
 ```bash
-swarm block CLD-042 "Waiting for staging DB credentials from ops"
+swarm block API-042 "Waiting for staging environment credentials from ops"
 ```
 
 ### `swarm unblock`
@@ -195,8 +195,8 @@ swarm block CLD-042 "Waiting for staging DB credentials from ops"
 Clear a blocked item back to Open (or back to Claimed if an agent is specified).
 
 ```bash
-swarm unblock CLD-042                  # → OPEN
-swarm unblock CLD-042 --reclaim        # → re-CLAIMED by current agent
+swarm unblock API-042                  # → OPEN
+swarm unblock API-042 --reclaim        # → re-CLAIMED by current agent
 ```
 
 ---
@@ -400,7 +400,7 @@ swarm schedule list
 ```bash
 swarm schedule add '0 */6 * * *' 'swarm heal --fix'             # every 6 hours
 swarm schedule add '6h' 'swarm audit --security' --name 'Security check'
-swarm schedule add 'on:done CLD-042' 'swarm ai "claim CLD-043"'  # event-driven
+swarm schedule add 'on:done API-042' 'swarm ai "claim API-043"'  # event-driven
 ```
 
 **Schedule types:**
@@ -409,8 +409,8 @@ swarm schedule add 'on:done CLD-042' 'swarm ai "claim CLD-043"'  # event-driven
 |------|------------|---------|
 | `cron` | 5-field cron | `0 9 * * 1` (Mondays 9am) |
 | `interval` | `Nm` / `Nh` / `Nd` | `30m`, `6h`, `2d` |
-| `on:done` | `on:done ITEM-ID` | `on:done CLD-042` |
-| `on:blocked` | `on:blocked ITEM-ID` | `on:blocked CLD-042` |
+| `on:done` | `on:done ITEM-ID` | `on:done API-042` |
+| `on:blocked` | `on:blocked ITEM-ID` | `on:blocked API-042` |
 
 ### `swarm schedule remove`
 
@@ -455,7 +455,7 @@ Workflows are markdown files in `.swarm/workflows/*.md` with a YAML frontmatter 
 Scaffold a new workflow file.
 
 ```bash
-swarm workflow create oauth2-flow --pattern sequential --trigger "on:done CLD-041"
+swarm workflow create rate-limiter-rollout --pattern sequential --trigger "on:done API-041"
 swarm workflow create weekly-report --pattern sequential --trigger "0 9 * * 1"
 ```
 
@@ -463,20 +463,20 @@ Edit the generated `.swarm/workflows/<name>.md`:
 
 ```markdown
 ---
-trigger: on:done CLD-041
+trigger: on:done API-041
 pattern: sequential
-description: OAuth2 integration sequence
+description: Rate limiter implementation sequence
 ---
 
 ## Steps
 
-1. swarm claim CLD-042
+1. swarm claim API-042
    agent: bedrock
    timeout: 30
 
-2. swarm claim CLD-043
+2. swarm claim API-043
    agent: claude
-   depends: CLD-042
+   depends: API-042
    timeout: 45
    if: step1.ok
 
@@ -494,15 +494,15 @@ swarm workflow list
 ### `swarm workflow show`
 
 ```bash
-swarm workflow show oauth2-flow
+swarm workflow show rate-limiter-rollout
 ```
 
 ### `swarm workflow run`
 
 ```bash
-swarm workflow run oauth2-flow              # confirm before running
-swarm workflow run oauth2-flow --dry-run    # show steps, no execution
-swarm workflow run oauth2-flow --yes        # skip confirmation
+swarm workflow run rate-limiter-rollout              # confirm before running
+swarm workflow run rate-limiter-rollout --dry-run    # show steps, no execution
+swarm workflow run rate-limiter-rollout --yes        # skip confirmation
 ```
 
 ### `swarm workflow status`
@@ -510,7 +510,7 @@ swarm workflow run oauth2-flow --yes        # skip confirmation
 Show last run result from `.swarm/workflow_runs.jsonl`.
 
 ```bash
-swarm workflow status oauth2-flow
+swarm workflow status rate-limiter-rollout
 ```
 
 ---
@@ -523,11 +523,11 @@ Translate a natural-language instruction into `.swarm/` operations using an LLM 
 Previews proposed changes before executing (unless `--yes`).
 
 ```bash
-swarm ai "mark CLD-042 as done, merged the OAuth PR"
+swarm ai "mark API-042 as done, merged the rate limiter PR"
 swarm ai "what should I work on next?"
-swarm ai "add three items for rate limiting: design, implement, test"
-swarm ai "write a memory entry: chose NATS over Kafka for lower latency"
-swarm ai "update focus to markets ASGI fix" --yes
+swarm ai "add three items for distributed tracing: design, implement, test"
+swarm ai "write a memory entry: chose sliding window over token bucket for burst tolerance"
+swarm ai "update focus to auth service hardening" --yes
 
 # With a specific backend:
 swarm ai "summarise the queue" --via claude
@@ -544,8 +544,8 @@ With `--chain`, the AI is re-invoked after each successful set of write operatio
 Each batch of chained operations is signed and recorded in `trail.log`.
 
 ```bash
-swarm ai "run the OAuth2 workflow: discovery, token exchange, refresh" --chain --yes
-swarm ai "implement auth, then markets, then geo modules" --chain --max-steps 9 --yes
+swarm ai "run the rate limiter rollout: design, implement, test, deploy" --chain --yes
+swarm ai "implement auth hardening, then tracing, then dashboard metrics" --chain --max-steps 9 --yes
 swarm ai "process the full pending queue" --chain --max-steps 20 --yes
 ```
 
@@ -628,10 +628,10 @@ The inspector role must be enabled first: `swarm role enable inspector`.
 ### `swarm inspect`
 
 ```bash
-swarm inspect CLD-042 --pass
-swarm inspect CLD-042 --pass --note "Tests pass, code reviewed"
+swarm inspect API-042 --pass
+swarm inspect API-042 --pass --note "Tests pass, memory profile clean"
 
-swarm inspect CLD-042 --fail --reason "Edge case X not handled — see test_auth.py:142"
+swarm inspect API-042 --fail --reason "Edge case under burst not handled — see test_rate_limiter.py:98"
 ```
 
 | Option | Required | Description |
@@ -663,10 +663,10 @@ Requires **tmux 3.0+** and the chosen agent CLI on PATH.
 
 ```bash
 # Worker — claim and open
-swarm spawn SWC-042                          # opencode worker, auto-claims item
-swarm spawn SWC-042 --agent claude           # Claude Code worker
-swarm spawn SWC-042 --agent ollama           # local Ollama worker
-swarm spawn SWC-042 --no-claim               # open window without claiming
+swarm spawn API-042                          # opencode worker, auto-claims item
+swarm spawn API-042 --agent claude           # Claude Code worker
+swarm spawn API-042 --agent ollama           # local Ollama worker
+swarm spawn API-042 --no-claim               # open window without claiming
 
 # Role agents
 swarm spawn --role inspector                  # inspector monitor window
@@ -674,9 +674,9 @@ swarm spawn --role supervisor                 # supervisor overview window
 swarm spawn --role watchdog                   # watchdog audit loop
 
 # Session control
-swarm spawn SWC-042 --session my-project     # custom tmux session name
-swarm spawn SWC-042 --window-name auth-fix   # custom window name
-swarm spawn SWC-042 --agent-id my-agent-42   # explicit SWARM_AGENT_ID
+swarm spawn API-042 --session my-project     # custom tmux session name
+swarm spawn API-042 --window-name rate-limiter-fix   # custom window name
+swarm spawn API-042 --agent-id my-agent-42   # explicit SWARM_AGENT_ID
 ```
 
 | Option | Default | Description |
@@ -699,7 +699,7 @@ swarm spawn SWC-042 --agent-id my-agent-42   # explicit SWARM_AGENT_ID
 **Attach / navigate:**
 ```bash
 tmux attach -t swarm                     # attach to session
-tmux select-window -t swarm:SWC-042      # switch to window
+tmux select-window -t swarm:API-042      # switch to window
 tmux list-windows -t swarm               # list all windows
 ```
 
@@ -740,11 +740,11 @@ swarm crawl --dry-run        # preview without writing anything
 
 **Example output:**
 ```
-Crawled /Users/me/oasis-cloud
+Crawled /Users/me/api-service
 
   Swarm divisions found (2) — skipped:
     services/auth/
-    services/markets/
+    services/payments/
 
   Catalogued (4 dirs):
     docs/ — 12 files (8×.md, 3×.png, 1×.svg)
@@ -831,17 +831,14 @@ See [Drift Check Setup](DRIFT_CHECK_SETUP.md) for AWS Bedrock prerequisites.
 | Division | Code |
 |----------|------|
 | Org level | `ORG` |
-| oasis-cloud | `CLD` |
-| oasis-cloud-admin | `ADM` |
-| oasis-weather | `WTH` |
-| oasis-firmware | `FW` |
-| oasis-home | `HM` |
-| oasis-ui | `UI` |
-| oasis-forms | `FRM` |
-| oasis-hardware | `HW` |
-| oasis-welcome | `WEB` |
-| oasis-cloud-wiki | `WIKI` |
-| oasis-records | `REC` |
+| api-service | `API` |
+| auth-service | `AUTH` |
+| dashboard | `DASH` |
+| mobile-app | `MOB` |
+| firmware | `FW` |
+| docs | `DOC` |
+| infra | `INF` |
+| homelab | `LAB` |
 | dot_swarm | `SWC` |
 
 IDs are assigned sequentially and never reused.
