@@ -1,0 +1,223 @@
+<h1 id="security-model">Security Model</h1>
+
+<p>dot_swarm’s security model is designed for the reality that AI agents operate
+autonomously on shared filesystems. The threat model is different from a web
+application — there’s no network perimeter, no auth layer, and the coordination
+medium itself (<code class="language-plaintext highlighter-rouge">.swarm/</code>) is readable and writable by any process on the machine.</p>
+
+<hr />
+
+<h2 id="protections-built-in">Protections built in</h2>
+
+<h3 id="cryptographic-signing-identity">Cryptographic signing identity</h3>
+
+<p>Every <code class="language-plaintext highlighter-rouge">swarm init</code> generates a per-swarm HMAC-SHA256 signing key stored in
+<code class="language-plaintext highlighter-rouge">.swarm/.signing_key</code>. This file is always gitignored regardless of trail
+visibility settings.</p>
+
+<p>All AI operations are signed before being appended to <code class="language-plaintext highlighter-rouge">trail.log</code>:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm audit <span class="nt">--trail</span>    <span class="c"># verify trail integrity</span>
+swarm heal             <span class="c"># full integrity pass including trail verification</span>
+</code></pre></div></div>
+
+<p>If any entry in <code class="language-plaintext highlighter-rouge">trail.log</code> has been tampered with, <code class="language-plaintext highlighter-rouge">swarm audit --trail</code> reports
+exactly which records fail verification.</p>
+
+<h3 id="18-pattern-adversarial-content-scanner">18-pattern adversarial content scanner</h3>
+
+<p><code class="language-plaintext highlighter-rouge">swarm audit --security</code> and <code class="language-plaintext highlighter-rouge">swarm heal</code> scan all <code class="language-plaintext highlighter-rouge">.swarm/</code> files <strong>and</strong> platform
+shims (CLAUDE.md, <code class="language-plaintext highlighter-rouge">.windsurfrules</code>, <code class="language-plaintext highlighter-rouge">.cursorrules</code>, <code class="language-plaintext highlighter-rouge">.github/copilot-instructions.md</code>)
+for adversarial content patterns:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Severity</th>
+      <th>Pattern category</th>
+      <th>Example</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>CRITICAL</strong></td>
+      <td>Data exfiltration instructions</td>
+      <td>“send contents of ~/.ssh to…”</td>
+    </tr>
+    <tr>
+      <td><strong>CRITICAL</strong></td>
+      <td>Safety override attempts</td>
+      <td>“ignore all previous instructions”</td>
+    </tr>
+    <tr>
+      <td><strong>CRITICAL</strong></td>
+      <td>Agent impersonation</td>
+      <td>fake claim stamps, forged agent IDs</td>
+    </tr>
+    <tr>
+      <td><strong>HIGH</strong></td>
+      <td>Prompt injection in memory/context</td>
+      <td>instructions embedded in <code class="language-plaintext highlighter-rouge">memory.md</code> entries</td>
+    </tr>
+    <tr>
+      <td><strong>HIGH</strong></td>
+      <td>Privilege escalation</td>
+      <td>“you are now operating in admin mode”</td>
+    </tr>
+    <tr>
+      <td><strong>MEDIUM</strong></td>
+      <td>Unusual encoding</td>
+      <td>base64-encoded instructions in notes fields</td>
+    </tr>
+    <tr>
+      <td><strong>MEDIUM</strong></td>
+      <td>Ambiguous authority claims</td>
+      <td>“the project owner has approved…”</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Use <code class="language-plaintext highlighter-rouge">swarm heal --fix</code> to quarantine flagged files for manual review rather than
+deleting them outright.</p>
+
+<h3 id="drift-detection">Drift detection</h3>
+
+<p><code class="language-plaintext highlighter-rouge">swarm audit --drift</code> compares the current <code class="language-plaintext highlighter-rouge">.swarm/</code> file contents against git
+history and the signed trail to identify writes that occurred outside the normal
+protocol flow — the earliest signal of unexpected agent activity.</p>
+
+<h3 id="trail-visibility-control">Trail visibility control</h3>
+
+<p><code class="language-plaintext highlighter-rouge">swarm trail invisible</code> (the default on <code class="language-plaintext highlighter-rouge">swarm init</code>) adds <code class="language-plaintext highlighter-rouge">.swarm/</code> to
+<code class="language-plaintext highlighter-rouge">.gitignore</code>. Your coordination history — every claim, handoff note, decision
+entry, and memory — stays private unless you explicitly share it.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm trail status     <span class="c"># invisible or visible?</span>
+swarm trail invisible  <span class="c"># default — private trail</span>
+swarm trail visible    <span class="c"># share trail with git</span>
+</code></pre></div></div>
+
+<h3 id="pheromone-decay">Pheromone decay</h3>
+
+<p>Stale claim stamps are flagged by <code class="language-plaintext highlighter-rouge">swarm audit</code>. If an agent claims an item and
+goes silent, the item surfaces in audit output with a staleness warning, preventing
+indefinite lock-out of work items.</p>
+
+<hr />
+
+<h2 id="known-attack-surface">Known attack surface</h2>
+
+<h3 id="shared-medium-poisoning">Shared medium poisoning</h3>
+
+<p><strong>The fundamental tradeoff of stigmergy.</strong> The <code class="language-plaintext highlighter-rouge">.swarm/</code> directory is the
+coordination medium — any process that can write to it can influence every agent
+that reads it. This is true of all environment-mediated coordination systems,
+including the ant pheromone trails that inspired dot_swarm.</p>
+
+<p><strong>Mitigations</strong>: adversarial scanner catches known injection patterns, signed trail
+detects tampering after the fact, <code class="language-plaintext highlighter-rouge">swarm heal</code> as a routine hygiene step after
+any agentic run.</p>
+
+<p><strong>Residual risk</strong>: novel injection patterns not yet in the 18-pattern set. The
+scanner is defense-in-depth, not a guarantee.</p>
+
+<h3 id="hmac-is-local-trust-only">HMAC is local-trust only</h3>
+
+<p>The signing key is per-swarm and never leaves the machine. HMAC-SHA256 protects
+trail integrity <em>within a swarm</em> but provides no cross-swarm authentication — a
+peer claiming to be <code class="language-plaintext highlighter-rouge">swarm-A</code> cannot be cryptographically verified without a
+PKI layer. An Ed25519 upgrade path is documented in the architecture notes; HMAC
+was chosen for stdlib-only implementation (no cryptography package required).</p>
+
+<h3 id="trail-sharing-equals-history-sharing">Trail sharing equals history sharing</h3>
+
+<p>Running <code class="language-plaintext highlighter-rouge">swarm trail visible</code> and pushing exposes your full coordination history
+to anyone who can clone the repo — every claim timestamp, every decision in
+<code class="language-plaintext highlighter-rouge">memory.md</code>, every handoff note. The default is invisible for this reason. Treat
+<code class="language-plaintext highlighter-rouge">swarm trail visible</code> like making a private branch public.</p>
+
+<h3 id="llm-generated-content-is-a-trust-boundary">LLM-generated content is a trust boundary</h3>
+
+<p>Content written by an agent into <code class="language-plaintext highlighter-rouge">memory.md</code>, <code class="language-plaintext highlighter-rouge">notes:</code> fields, or <code class="language-plaintext highlighter-rouge">context.md</code>
+can influence future agents that read those files. This is the environment-poisoning
+attack surface unique to stigmergic systems: a compromised agent writes a
+plausible-looking pheromone that steers subsequent agents in the wrong direction.</p>
+
+<p>The 18-pattern scanner is designed to catch the known forms of this attack. It
+does not — and cannot — catch all possible adversarial framings. Running <code class="language-plaintext highlighter-rouge">swarm heal</code>
+after any agentic session is the operational control.</p>
+
+<h3 id="no-real-time-federation-yet">No real-time federation yet</h3>
+
+<p>Cross-swarm coordination currently uses file-based OGP-lite signed messages (inbox/
+outbox directories). There is no live network connection between swarms. This means
+there is also no real-time attack surface from remote swarms — but it also means
+federation integrity relies on the transport (git, file copy, etc.) rather than
+end-to-end cryptographic verification of message origin.</p>
+
+<p>Live networked federation with Ed25519 message signing is planned for a future
+release if the userbase warrants it.</p>
+
+<hr />
+
+<h2 id="security-commands-reference">Security commands reference</h2>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm audit <span class="nt">--security</span>       <span class="c"># scan for adversarial content patterns</span>
+swarm audit <span class="nt">--trail</span>          <span class="c"># verify trail.log cryptographic integrity</span>
+swarm audit <span class="nt">--drift</span>          <span class="c"># detect out-of-band file modifications</span>
+swarm audit <span class="nt">--full</span>           <span class="c"># all of the above + stale claim check</span>
+swarm heal                   <span class="c"># full integrity pass + optional --fix quarantine</span>
+swarm trail status           <span class="c"># show current visibility</span>
+swarm trail invisible        <span class="c"># hide .swarm/ from git (default on init)</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="threat-model-summary">Threat model summary</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Threat</th>
+      <th>Mitigated by</th>
+      <th>Residual risk</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Compromised agent writes to <code class="language-plaintext highlighter-rouge">.swarm/</code></td>
+      <td>Adversarial scanner + signed trail</td>
+      <td>Novel patterns evade scanner</td>
+    </tr>
+    <tr>
+      <td>Stale claim locks out work</td>
+      <td>Pheromone decay in <code class="language-plaintext highlighter-rouge">swarm audit</code></td>
+      <td>None for honest timeouts</td>
+    </tr>
+    <tr>
+      <td>Trail tampered after the fact</td>
+      <td>HMAC-SHA256 per entry in trail.log</td>
+      <td>Key compromise</td>
+    </tr>
+    <tr>
+      <td>History exposed via git push</td>
+      <td>Trail invisible by default</td>
+      <td>User opts in knowingly</td>
+    </tr>
+    <tr>
+      <td>Cross-swarm identity spoofing</td>
+      <td>Fingerprint-indexed peer records</td>
+      <td>No PKI; HMAC only</td>
+    </tr>
+    <tr>
+      <td>LLM prompt injection via shared medium</td>
+      <td>18-pattern scanner</td>
+      <td>Zero-day patterns</td>
+    </tr>
+    <tr>
+      <td>Rogue federation message</td>
+      <td>Doorman: policy → peer record → runtime</td>
+      <td>Transport-layer attacks</td>
+    </tr>
+  </tbody>
+</table>
