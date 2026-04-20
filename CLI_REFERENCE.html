@@ -957,6 +957,37 @@ Run 'swarm heal' to verify context alignment after cataloging.
 
 <hr />
 
+<h3 id="swarm-trail"><code class="language-plaintext highlighter-rouge">swarm trail</code></h3>
+
+<p>Manage whether <code class="language-plaintext highlighter-rouge">.swarm/</code> is visible or hidden in git. The trail is <strong>invisible by
+default</strong> — your swarm state stays private unless you explicitly share it.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm trail status     <span class="c"># show current visibility + .gitignore path</span>
+swarm trail invisible  <span class="c"># hide .swarm/ (adds .swarm/ to .gitignore)</span>
+swarm trail visible    <span class="c"># share .swarm/ (removes .swarm/ from .gitignore)</span>
+</code></pre></div></div>
+
+<p><strong>Why this matters:</strong> sharing a git repo also shares the full swarm trail — every
+claim, completion, handoff note, and memory entry. <code class="language-plaintext highlighter-rouge">invisible</code> is the default so
+that decision is always explicit.</p>
+
+<p><strong>After making visible:</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm trail visible
+git add .swarm/
+git commit <span class="nt">-m</span> <span class="s2">"chore: share swarm trail"</span>
+</code></pre></div></div>
+
+<p><strong>Security note:</strong> <code class="language-plaintext highlighter-rouge">trail invisible</code> only affects git tracking. The <code class="language-plaintext highlighter-rouge">.swarm/</code>
+files remain fully functional locally; the signing key (<code class="language-plaintext highlighter-rouge">.swarm/.signing_key</code>)
+and quarantine dir are always excluded by <code class="language-plaintext highlighter-rouge">.swarm/.gitignore</code> regardless of
+trail visibility.</p>
+
+<p><code class="language-plaintext highlighter-rouge">swarm init</code> defaults to invisible. Pass <code class="language-plaintext highlighter-rouge">--visible</code> to opt in at init time:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm init <span class="nt">--visible</span>   <span class="c"># share trail from the start</span>
+</code></pre></div></div>
+
+<hr />
+
 <h3 id="swarm-configure"><code class="language-plaintext highlighter-rouge">swarm configure</code></h3>
 
 <p>Interactive wizard to set your default LLM interface and (if Bedrock) model + region.</p>
