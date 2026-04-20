@@ -122,6 +122,22 @@ around which complicated systems must be arranged to prevent bottlenecks and
 data loss from information overload.</em></p>
 </blockquote>
 
+<pre><code class="language-mermaid">graph TD
+    A[Agent Session Start] --&gt; B[Read .swarm/BOOTSTRAP.md]
+    B --&gt; C[Read .swarm/state.md &amp; queue.md]
+    C --&gt; D{Find Work?}
+    D -- Yes --&gt; E[swarm claim ID]
+    E --&gt; F[Update .swarm/state.md]
+    F --&gt; G[Perform Implementation]
+    G --&gt; H[swarm done ID]
+    H --&gt; I[Update .swarm/state.md &amp; trail.log]
+    I --&gt; J[Git Push]
+    J --&gt; K[Environment Updated]
+    K --&gt; A
+    D -- No --&gt; L[swarm handoff]
+    L --&gt; J
+</code></pre>
+
 <p>The <code class="language-plaintext highlighter-rouge">.swarm/</code> directory <em>is</em> the shared medium. <code class="language-plaintext highlighter-rouge">state.md</code> <em>is</em> the pheromone trail.
 <code class="language-plaintext highlighter-rouge">BOOTSTRAP.md</code> <em>is</em> the chemical language every agent reads first. Git is the transport.</p>
 
@@ -203,6 +219,29 @@ swarm ready <span class="nt">--json</span>   <span class="c"># machine-readable,
 
 <h3 id="hierarchical-coordination">Hierarchical Coordination</h3>
 
+<pre><code class="language-mermaid">graph LR
+    subgraph Org [Organization Level]
+        O_S[.swarm/]
+        O_Q[queue.md]
+    end
+    
+    subgraph DivA [Division A]
+        A_S[.swarm/]
+        A_Q[queue.md]
+    end
+    
+    subgraph DivB [Division B]
+        B_S[.swarm/]
+        B_Q[queue.md]
+    end
+    
+    O_Q -- refs --&gt; A_Q
+    O_Q -- refs --&gt; B_Q
+    A_Q -- depends --&gt; O_Q
+    
+    style Org fill:#f9f9f9,stroke:#333,stroke-width:2px
+</code></pre>
+
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Organization (your-company/)       ← cross-repo initiatives
   .swarm/
 ├── Division (service-a/)          ← single-repo work
@@ -219,6 +258,17 @@ live at org level with <code class="language-plaintext highlighter-rouge">refs:<
 <hr />
 
 <h2 id="quick-start">Quick Start</h2>
+
+<h3 id="prerequisites">Prerequisites</h3>
+
+<p>To use <code class="language-plaintext highlighter-rouge">dot_swarm</code> (especially the <code class="language-plaintext highlighter-rouge">spawn</code> and <code class="language-plaintext highlighter-rouge">federation</code> features), you need:</p>
+
+<ul>
+  <li><strong>Python 3.10+</strong></li>
+  <li><strong>Git</strong> (for trail transport and <code class="language-plaintext highlighter-rouge">swarm trail</code> visibility)</li>
+  <li><strong>tmux 3.0+</strong> (required for <code class="language-plaintext highlighter-rouge">swarm spawn</code> worker/role isolation)</li>
+  <li><strong>Optional</strong>: AWS CLI (for Bedrock AI backend) or Ollama (for local AI backend)</li>
+</ul>
 
 <h4 id="project-management-only">Project management only</h4>
 
