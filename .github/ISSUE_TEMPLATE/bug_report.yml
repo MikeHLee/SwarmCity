@@ -1,0 +1,52 @@
+name: Bug Report
+description: Report a bug to help us improve dot_swarm
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug! Please provide as much detail as possible.
+  - type: input
+    id: swarm_id
+    attributes:
+      label: Swarm Item ID (if applicable)
+      description: e.g., SWC-042
+    validations:
+      required: false
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: How do we reproduce this behavior?
+      placeholder: |
+        1. Run `swarm init`
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happened?
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Python version, dot_swarm version, etc.
+    validations:
+      required: true

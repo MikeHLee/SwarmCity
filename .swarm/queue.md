@@ -298,6 +298,58 @@ Item IDs: `SWC-<3-digit-number>` — assigned sequentially, never reused.
              dot_swarm equivalent: .swarm/merge_queue.md + swarm merge enqueue/next/pop.
              Lower priority since single-master git workflows mostly avoid this problem.
 
+<!-- ═══════════════ CORE ARCHITECTURE + REPO STANDARDS ═══════════════ -->
+
+- [ ] [SWC-033] [OPEN] Implement Conflict-Free Concurrency Mechanism (claims/ directory)
+      project: architecture
+      priority: high
+      notes: Transition to append-only file structure (.swarm/claims/) to avoid Git merge conflicts.
+             Update read protocols to dynamically resolve concurrent claims. [ARCH-001]
+
+- [x] [SWC-034] [DONE · 2026-04-20] Mandate MCP Server for Agent Interactions
+      project: architecture
+      priority: high
+      notes: Expand MCP server implementation. Enforce agent interaction via tools rather than
+             raw file editing to prevent Markdown parsing brittleness. [ARCH-002]
+
+- [x] [SWC-035] [DONE · 2026-04-20] Add Open Source License (MIT or Apache 2.0) Add Open Source License (MIT or Apache 2.0)
+      project: repo-standards
+      priority: high
+      notes: Add LICENSE file to root to unblock corporate and widespread adoption. [REPO-001]
+
+- [x] [SWC-036] [DONE · 2026-04-20] Establish Governance & Contribution Guidelines Establish Governance & Contribution Guidelines
+      project: repo-standards
+      priority: high
+      notes: Create CONTRIBUTING.md and .github/ISSUE_TEMPLATE files. [REPO-002]
+
+- [x] [SWC-037] [DONE · 2026-04-20] Expand CI/CD Matrix (Linux, macOS, Windows) Expand CI/CD Matrix (Linux, macOS, Windows)
+      project: repo-standards
+      priority: high
+      notes: Ensure GitHub Actions run tests across all major OSes for path handling. [REPO-003]
+
+<!-- ═══════════════ FEATURES + FUTURE DIRECTIONS ═══════════════ -->
+
+- [x] [SWC-038] [DONE · 2026-04-20] Native CI/CD Integration: GitHub Action for audit/heal Native CI/CD Integration: GitHub Action for audit/heal
+      project: features
+      priority: medium
+      notes: Create/publish official Action to ensure protocol files haven't drifted.
+
+- [x] [SWC-039] [DONE · 2026-04-20] Competitive Task Resolution (Parallel Execution)
+      project: features
+      priority: medium
+      notes: Implement intentional duplicate claims [COMPETING] or [REVIEW].
+             Inspector/Supervisor agents vote on winning implementation.
+
+- [x] [SWC-040] [DONE · 2026-04-20] Visual Protocol Diagrams (Mermaid.js)
+      project: docs
+      priority: medium
+      notes: Add diagrams to README demonstrating stigmergy feedback loop. [DOCS-001]
+
+- [x] [SWC-041] [DONE · 2026-04-20] Explicitly list system-level prerequisites (Git, tmux) Explicitly list system-level prerequisites (Git, tmux)
+      project: docs
+      priority: medium
+      notes: Add to Quick Start/Installation guide to prevent command-not-found errors. [DOCS-002]
+
 <!-- ═══════════════ DISTRIBUTION ═══════════════ -->
 
 - [ ] [SWC-003] [OPEN] Configure Trusted Publishing (OIDC) on PyPI

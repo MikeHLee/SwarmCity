@@ -71,6 +71,23 @@ dot_swarm applies this model directly to software agent fleets:
 > around which complicated systems must be arranged to prevent bottlenecks and
 > data loss from information overload.*
 
+```mermaid
+graph TD
+    A[Agent Session Start] --> B[Read .swarm/BOOTSTRAP.md]
+    B --> C[Read .swarm/state.md & queue.md]
+    C --> D{Find Work?}
+    D -- Yes --> E[swarm claim ID]
+    E --> F[Update .swarm/state.md]
+    F --> G[Perform Implementation]
+    G --> H[swarm done ID]
+    H --> I[Update .swarm/state.md & trail.log]
+    I --> J[Git Push]
+    J --> K[Environment Updated]
+    K --> A
+    D -- No --> L[swarm handoff]
+    L --> J
+```
+
 The `.swarm/` directory *is* the shared medium. `state.md` *is* the pheromone trail.
 `BOOTSTRAP.md` *is* the chemical language every agent reads first. Git is the transport.
 
@@ -131,6 +148,30 @@ swarm ready --json   # machine-readable, for agent scripts
 
 ### Hierarchical Coordination
 
+```mermaid
+graph LR
+    subgraph Org [Organization Level]
+        O_S[.swarm/]
+        O_Q[queue.md]
+    end
+    
+    subgraph DivA [Division A]
+        A_S[.swarm/]
+        A_Q[queue.md]
+    end
+    
+    subgraph DivB [Division B]
+        B_S[.swarm/]
+        B_Q[queue.md]
+    end
+    
+    O_Q -- refs --> A_Q
+    O_Q -- refs --> B_Q
+    A_Q -- depends --> O_Q
+    
+    style Org fill:#f9f9f9,stroke:#333,stroke-width:2px
+```
+
 ```
 Organization (your-company/)       ← cross-repo initiatives
   .swarm/
@@ -148,6 +189,15 @@ Use `swarm ascend` and `swarm descend` to check alignment across levels.
 ---
 
 ## Quick Start
+
+### Prerequisites
+
+To use `dot_swarm` (especially the `spawn` and `federation` features), you need:
+
+- **Python 3.10+**
+- **Git** (for trail transport and `swarm trail` visibility)
+- **tmux 3.0+** (required for `swarm spawn` worker/role isolation)
+- **Optional**: AWS CLI (for Bedrock AI backend) or Ollama (for local AI backend)
 
 #### Project management only
 

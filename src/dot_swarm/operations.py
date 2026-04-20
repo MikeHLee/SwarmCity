@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from .models import (
-    ItemState, Priority, SwarmPaths, SwarmState, WorkItem,
+    Claim, ItemState, Priority, SwarmPaths, SwarmState, WorkItem,
     _now_ts, _parse_ts, PRIORITY_ORDER,
 )
 
@@ -31,7 +31,7 @@ FIELD_RE = re.compile(r"^\s{6}(?P<key>priority|project|notes|depends|refs|proof|
 
 
 def read_queue(paths: SwarmPaths) -> tuple[list[WorkItem], list[WorkItem], list[WorkItem]]:
-    """Parse queue.md into (active, pending, done) lists."""
+    """Parse queue.md into (active, pending, done) lists, resolved with dynamic claims."""
     if not paths.queue.exists():
         return [], [], []
 
@@ -40,6 +40,92 @@ def read_queue(paths: SwarmPaths) -> tuple[list[WorkItem], list[WorkItem], list[
     active = _parse_items(sections.get("Active", ""))
     pending = _parse_items(sections.get("Pending", ""))
     done = _parse_items(sections.get("Done", ""))
+
+    # Resolve with dynamic claims
+    claims = read_claims(paths)
+    active, pending, done = resolve_claims(active, pending, done, claims)
+
+    return active, pending, done
+
+
+def read_claims(paths: SwarmPaths) -> list[Claim]:
+    """Read all claim files from .swarm/claims/."""
+    claims = []
+    if not paths.claims.is_dir():
+        return []
+    for p in paths.claims.glob("*.json"):
+        try:
+            data = json.loads(p.read_text())
+            claims.append(Claim.from_dict(data))
+        except (json.JSONDecodeError, KeyError, ValueError):
+            continue
+    return claims
+
+
+def write_claim(paths: SwarmPaths, claim: Claim) -> None:
+    """Write a claim file to .swarm/claims/."""
+    paths.claims.mkdir(parents=True, exist_ok=True)
+    # File name: <item_id>_<agent_id>_<timestamp>.json (safe for filesystems)
+    ts_safe = claim.timestamp.strftime("%Y%m%dT%H%M%SZ")
+    filename = f"{claim.item_id}_{claim.agent_id}_{ts_safe}.json"
+    p = paths.claims / filename
+    p.write_text(json.dumps(claim.to_dict(), indent=2))
+
+
+def clear_claims(paths: SwarmPaths, item_id: str) -> None:
+    """Remove all claim files for a specific item."""
+    if not paths.claims.is_dir():
+        return
+    for p in paths.claims.glob(f"{item_id}_*.json"):
+        p.unlink()
+
+
+def resolve_claims(
+    active: list[WorkItem],
+    pending: list[WorkItem],
+    done: list[WorkItem],
+    claims: list[Claim],
+) -> tuple[list[WorkItem], list[WorkItem], list[WorkItem]]:
+    """Apply dynamic claims to the base queue items."""
+    if not claims:
+        return active, pending, done
+
+    all_items = {i.id: i for i in active + pending + done}
+
+    # Group claims by item_id and find the newest for each
+    newest_claims: dict[str, Claim] = {}
+    for c in claims:
+        if c.item_id not in newest_claims or c.timestamp > newest_claims[c.item_id].timestamp:
+            newest_claims[c.item_id] = c
+
+    for item_id, claim in newest_claims.items():
+        if item_id not in all_items:
+            continue
+        item = all_items[item_id]
+
+        # DONE in queue.md always wins over any dynamic claim
+        if item.state == ItemState.DONE:
+            continue
+
+        # Update item state from claim
+        item.state = claim.state
+        item.claimed_by = claim.agent_id
+        item.claimed_at = claim.timestamp
+        if claim.proof:
+            item.proof = claim.proof
+        if claim.note:
+            item.notes = (item.notes + " | " + claim.note).strip(" | ")
+
+        # Re-sort into lists based on new state
+        if item.state in (ItemState.CLAIMED, ItemState.PARTIAL):
+            if item in pending:
+                pending.remove(item)
+                active.append(item)
+        elif item.state == ItemState.OPEN:
+            if item in active:
+                active.remove(item)
+                pending.append(item)
+
     return active, pending, done
 
 
@@ -155,33 +241,47 @@ def next_item_id(paths: SwarmPaths, division_code: str) -> str:
     return f"{division_code}-{max_num + 1:03d}"
 
 
-def claim_item(paths: SwarmPaths, item_id: str, agent_id: str) -> WorkItem:
-    """Claim an OPEN work item. Raises ValueError if not found or already claimed."""
+def claim_item(paths: SwarmPaths, item_id: str, agent_id: str, compete: bool = False) -> WorkItem:
+    """Claim an OPEN or already CLAIMED work item (if compete=True)."""
     active, pending, done = read_queue(paths)
     target = _find_item(pending + active, item_id)
     if target is None:
         raise ValueError(f"Item {item_id} not found in active or pending queue.")
-    if target.state == ItemState.CLAIMED:
-        raise ValueError(
-            f"Item {item_id} is already claimed by {target.claimed_by} since "
-            f"{target.claimed_at}. Use 'swarm partial {item_id}' to re-claim."
-        )
+    
+    # Check if already claimed
+    if target.state in (ItemState.CLAIMED, ItemState.PARTIAL, ItemState.COMPETING):
+        if not compete:
+            raise ValueError(
+                f"Item {item_id} is already claimed by {target.claimed_by}. "
+                "Use --compete to submit a competing implementation."
+            )
+        target.state = ItemState.COMPETING
+    else:
+        target.state = ItemState.CLAIMED
 
-    target.state = ItemState.CLAIMED
     target.claimed_by = agent_id
     target.claimed_at = datetime.utcnow()
 
-    # Move from pending to active
-    pending = [i for i in pending if i.id != item_id]
-    if target not in active:
+    # Move from pending to active if needed
+    if target in pending:
+        pending.remove(target)
         active.append(target)
 
     write_queue(paths, active, pending, done)
+    
+    # Forward-compatible: write claim to directory if it exists
+    if paths.claims.is_dir():
+        write_claim(paths, Claim(
+            item_id=target.id,
+            agent_id=agent_id,
+            state=target.state,
+            timestamp=target.claimed_at
+        ))
     return target
 
 
 def done_item(paths: SwarmPaths, item_id: str, agent_id: str, note: str = "") -> WorkItem:
-    """Mark a claimed item as done."""
+    """Mark a claimed item as done in queue.md and clear claims."""
     active, pending, done = read_queue(paths)
     target = _find_item(active + pending, item_id)
     if target is None:
@@ -194,9 +294,11 @@ def done_item(paths: SwarmPaths, item_id: str, agent_id: str, note: str = "") ->
 
     active = [i for i in active if i.id != item_id]
     pending = [i for i in pending if i.id != item_id]
-    done.append(target)
+    if target not in done:
+        done.append(target)
 
     write_queue(paths, active, pending, done)
+    clear_claims(paths, item_id)
     return target
 
 
@@ -223,7 +325,7 @@ def partial_item(paths: SwarmPaths, item_id: str, agent_id: str, note: str = "")
 
 
 def block_item(paths: SwarmPaths, item_id: str, reason: str) -> WorkItem:
-    """Mark a work item as BLOCKED with a reason."""
+    """Mark a work item as BLOCKED with a reason and clear claims."""
     active, pending, done = read_queue(paths)
     target = _find_item(active + pending, item_id)
     if target is None:
@@ -233,6 +335,7 @@ def block_item(paths: SwarmPaths, item_id: str, reason: str) -> WorkItem:
     target.notes = f"BLOCKED: {reason}"
 
     write_queue(paths, active, pending, done)
+    clear_claims(paths, item_id)
     return target
 
 
@@ -327,6 +430,7 @@ def reopen_item(
         pending.append(target)
 
     write_queue(paths, active, pending, done)
+    clear_claims(paths, item_id)
     return target, exhausted
 
 

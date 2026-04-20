@@ -296,24 +296,53 @@ def ready(ctx: click.Context, as_json: bool) -> None:
 @cli.command()
 @click.argument("item_id")
 @click.option("--agent", default=None, help="Agent ID (default: $SWARM_AGENT_ID or human-$USER)")
+@click.option("--compete", is_flag=True, help="Claim an already claimed item for a competing implementation")
 @click.pass_context
-def claim(ctx: click.Context, item_id: str, agent: str | None) -> None:
+def claim(ctx: click.Context, item_id: str, agent: str | None, compete: bool) -> None:
     """Claim a work item. Updates queue.md and state.md."""
     paths = _get_paths(ctx.obj["path"])
     agent_id = agent or _default_agent()
     try:
-        item = claim_item(paths, item_id, agent_id)
+        item = claim_item(paths, item_id, agent_id, compete=compete)
         write_state(paths, {
             "Current focus": item.description[:100],
             "Active items": item_id,
             "last_agent": agent_id,
         })
-        click.echo(f"Claimed [{item_id}] for {agent_id}: {item.description}")
+        if item.state == ItemState.COMPETING:
+            click.echo(f"COMPETING claim recorded for [{item_id}] by {agent_id}.")
+        else:
+            click.echo(f"Claimed [{item_id}] for {agent_id}: {item.description}")
         click.echo("Remember to update state.md and run 'swarm done' when complete.")
     except ValueError as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 
+
+# ---------------------------------------------------------------------------
+# swarm review
+# ---------------------------------------------------------------------------
+
+@cli.command()
+@click.argument("item_id")
+@click.option("--agent", default=None, help="Agent ID (default: $SWARM_AGENT_ID or human-$USER)")
+@click.pass_context
+def review(ctx: click.Context, item_id: str, agent: str | None) -> None:
+    """Move a COMPETING item into REVIEW state."""
+    paths = _get_paths(ctx.obj["path"])
+    agent_id = agent or _default_agent()
+    active, pending, done = read_queue(paths)
+    target = next((i for i in active + pending if i.id == item_id), None)
+    if not target:
+        click.echo(f"Error: Item {item_id} not found.", err=True)
+        sys.exit(1)
+    
+    target.state = ItemState.REVIEW
+    target.claimed_by = agent_id
+    target.claimed_at = datetime.utcnow()
+    
+    write_queue(paths, active, pending, done)
+    click.echo(f"Item [{item_id}] is now in REVIEW by {agent_id}.")
 
 # ---------------------------------------------------------------------------
 # swarm done

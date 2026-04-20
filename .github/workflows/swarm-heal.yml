@@ -1,0 +1,43 @@
+name: Swarm Health Check
+
+on:
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  health-check:
+    name: Audit and Heal
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dot-swarm
+        run: |
+          pip install .[ai]
+
+      - name: Run Swarm Audit
+        id: audit
+        run: |
+          echo "### Swarm Audit Findings" >> $GITHUB_STEP_SUMMARY
+          swarm audit --full >> $GITHUB_STEP_SUMMARY || true
+
+      - name: Run Swarm Heal
+        id: heal
+        run: |
+          echo "### Swarm Heal Report" >> $GITHUB_STEP_SUMMARY
+          swarm heal >> $GITHUB_STEP_SUMMARY || true
+
+      - name: Check for Trail Drift
+        run: |
+          git status
+          # If heal modified files (e.g. trail.log), we might want to fail or warn
+          # For now, just report.

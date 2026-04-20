@@ -22,4 +22,6 @@ dot_swarm is a minimal, git-native, markdown-first agent orchestration system fo
 3. **Research — Boids Looping (SWC-008)**: Writing the SIGGRAPH Talks / Eurographics short paper. Core contribution: jerk + snap constraints + trajectory-capture looping + Hermite C1 approach, achieving 99.7% reduction in loop error. Needs ablation study; depends on BoidRunner refactor for eval harness.
 4. **BoidRunner (SWC-009)**: Phased launch — (1) technical blog post leading with animated GIFs and loop-error chart, (2) standalone PyPI package with clean `Swarm` API, (3) browser-based interactive simulator / casual game.
 5. **Swarm Visualizer**: GUI for visualizing swarm trails — complete.
+7. **Core Architecture (ARCH-001/002)**: Transitioning to append-only claim files (`.swarm/claims/`) to eliminate Git merge conflicts (SWC-033). Mandating MCP server for agent interactions to ensure protocol safety and Markdown integrity (SWC-034).
+8. **Repository & Community Standards (REPO-001/002/003)**: Adding Open Source License (SWC-035), establishing governance/CONTRIBUTING.md (SWC-036), and expanding CI/CD matrix to Linux/macOS/Windows (SWC-037).
 6. **Hierarchical Alignment**: CLI commands (`up` and `down`) — complete.

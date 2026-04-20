@@ -1,64 +1,18 @@
 # State — dot_swarm
 
-**Last touched**: 2026-04-19T12:00Z by human-ML + claude-sonnet-4-6
+**Last touched**: 2026-04-20T16:00Z by Gemini-CLI
 **Current focus**: Docs migrated to Jekyll/just-the-docs; README overhauled; roadmap expanded
 **Active items**: (none)
 **Blockers**: PyPI Trusted Publishing not yet configured (manual step for SWC-003)
-**Ready for pickup**: SWC-026 (trail visibility toggle), SWC-028 (ollama backend), SWC-030 (security docs), SWC-021, SWC-007, SWC-008, SWC-009
+**Ready for pickup**: SWC-033, SWC-034, SWC-035, SWC-036, SWC-037, SWC-026 (trail visibility toggle), SWC-028 (ollama backend), SWC-030 (security docs), SWC-021, SWC-007, SWC-008, SWC-009
 
 ---
 
 ## Handoff Note
 
-**Docs + README overhaul (2026-04-19)**:
-Migrated from MkDocs Material → Jekyll just-the-docs with oasis-x color scheme
-(#fafafa bg, teal #165f59 accent, Montserrat font — pulled live from dev.o-x.io).
-New: docs/Gemfile, docs/_config.yml, docs/_sass/color_schemes/oasis.scss,
-docs/_includes/head_custom.html. Deploy workflow updated to ruby/setup-ruby + peaceiris/actions-gh-pages.
-README: rewritten hero tagline ("ecologically-inspired, environment-first"), expanded stigmergy section,
-added spawn/crawl/role/inspect quick starts, docs nav links at top.
-Queued: SWC-026 (trail visibility), SWC-027 (init/crawl/explore coupling), SWC-028 (ollama backend),
-SWC-029 (opencode+tmux workflow docs), SWC-030 (security overhaul), SWC-031 (generic examples),
-SWC-032 (move internal notes to .swarm trail).
-oasis-x queue: ORG-044 added — human to-do lists backed by .swarm protocol for oasis-scientific
-dashboard + oasis-home mobile app ("symbiotic intelligence" — human and agent share the same queue.md).
-
-**Spawn, crawl, retry logic complete (2026-04-19)**:
-swarm spawn: tmux worker/role launcher with auto-claim, SWARM_AGENT_ID/ROLE env, opencode|claude|ollama|bedrock.
-swarm crawl: crawl_directory() walks tree, skips .swarm/ divisions, writes Directory Map to context.md.
-WorkItem.max_retries: task-level inspector retry override; block-on-exhaust replaces watchdog role.
-Watchdog subsumed into reopen_item() auto-BLOCK; Librarian subsumed into swarm crawl.
-Docs updated: ROLES.md, CLI_REFERENCE.md (spawn, crawl, max_retries, updated interaction map).
-SWC-020 (watchdog), SWC-022 (librarian), SWC-023 (spawn), SWC-025 (crawl+retries) all DONE.
-
-**Agent roles + multi-agent tooling implemented (2026-04-18)**:
-New files: `src/dot_swarm/roles.py` — RoleConfig, enable/disable/load/list_roles,
-validate_proof, check_escalation. Four roles defined: inspector, watchdog, supervisor, librarian.
-WorkItem model gains `proof:` and `inspect_fails:` fields (parse + serialize).
-operations.py: `ready_items()` (bd-ready equivalent), `reopen_item()` (inspector fail path).
-CLI additions: `swarm ready [--json]`, `swarm role list/enable/disable/show`,
-`swarm inspect <id> --pass|--fail --reason`, `swarm partial --proof`, `swarm done --force`.
-mkdocs.yml fixed: site_url/repo_url updated from SwarmCity → dot_swarm.
-Tests: 195 still passing (no new test files yet — SWC-019 still needs test coverage).
-Next: write tests for roles.py + new CLI commands, then implement SWC-020 (watchdog escalation log).
-
-**Phase 1 implementation complete (2026-04-06)**:
-New files created:
-- `src/dot_swarm/signing.py` — HMAC-SHA256 identity, pheromone trail.log, blocked_peers.json
-- `src/dot_swarm/security.py` — 18-pattern adversarial content scanner (CRITICAL/HIGH/MEDIUM)
-- `src/dot_swarm/swarms_provider.py` — DotSwarmStateProvider + StigmergicSwarm (swarms.ai bridge)
-
-CLI additions:
-- `swarm heal` — full alignment + security scan + trail verification + memory logging + --fix quarantine
-- `swarm audit` — enhanced: --pending --security --drift --trail --full flags
-- `swarm ai --chain` — auto-chains AI invocations; --max-steps N; signs each batch in trail.log
-- `swarm init` — now auto-generates signing identity + .swarm/.gitignore
-
-Phase dependency order: SWC-010/011 (crypto+heal) → SWC-012 (docs) → SWC-013 (scheduling) → SWC-014 (federation uses SWC-010 crypto) → SWC-015 (swarms.ai PR, uses SWC-013 workflows)
-
-**Research track (from 2026-04-03)**: SWC-007 (stigmergy paper), SWC-008 (boids paper), SWC-009 (BoidRunner).
-
-**Distribution still blocked**: configure Trusted Publishing (OIDC) on PyPI at
-pypi.org/manage/project/dot-swarm/settings/publishing/ for repo MikeHLee/dot_swarm, workflow
-publish-pypi.yml. Then tag v0.3.0 → publish workflow fires → Homebrew SHA256 available.
-
+**Core Standards & CI/CD Expansion (2026-04-20)**:
+- Added MIT LICENSE and CONTRIBUTING.md.
+- Created GitHub Issue Templates (Bug/Feature).
+- Expanded MCP Server with `swarm_partial`, `swarm_block`, `swarm_ready`, `swarm_inspect`, and `swarm_heal`.
+- Added multi-OS CI matrix (Linux, macOS, Windows) and PR Health Check (audit/heal).
+- Implemented `claims/` directory for conflict-free concurrency (parked for v1.0 transition).

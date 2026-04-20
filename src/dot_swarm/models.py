@@ -16,6 +16,8 @@ class ItemState(str, Enum):
     OPEN = "OPEN"
     CLAIMED = "CLAIMED"
     PARTIAL = "PARTIAL"
+    COMPETING = "COMPETING"
+    REVIEW = "REVIEW"
     BLOCKED = "BLOCKED"
     DONE = "DONE"
     CANCELLED = "CANCELLED"
@@ -55,13 +57,13 @@ class WorkItem:
     #      or: - [ ] [ORG-002] [OPEN] description
     #      or: - [x] [ORG-002] [DONE · 2026-03-26T16:45Z] description
     ITEM_RE = re.compile(
-        r"^- \[(?P<checkbox>[x> ])\] "
+        r"^- \[(?P<checkbox>.)\] "
         r"\[(?P<id>[A-Z]+-\d+)\] "
         r"\[(?P<stamp>[^\]]+)\] "
         r"(?P<description>.+)$"
     )
     CLAIM_STAMP_RE = re.compile(
-        r"CLAIMED · (?P<agent>[^ ·]+) · (?P<ts>[0-9T:Z-]+)"
+        r"(?P<state>CLAIMED|COMPETING|REVIEW) · (?P<agent>[^ ·]+) · (?P<ts>[0-9T:Z-]+)"
         r"(?: · (?P<modifier>PARTIAL))?"
     )
     DONE_STAMP_RE = re.compile(r"DONE · (?P<ts>[0-9T:Z-]+)")
@@ -86,7 +88,11 @@ class WorkItem:
         elif cm := cls.CLAIM_STAMP_RE.match(stamp):
             item.claimed_by = cm.group("agent")
             item.claimed_at = _parse_ts(cm.group("ts"))
-            item.state = ItemState.PARTIAL if cm.group("modifier") == "PARTIAL" else ItemState.CLAIMED
+            st = cm.group("state")
+            if cm.group("modifier") == "PARTIAL":
+                item.state = ItemState.PARTIAL
+            else:
+                item.state = ItemState(st)
         elif dm := cls.DONE_STAMP_RE.match(stamp):
             item.done_at = _parse_ts(dm.group("ts"))
             item.state = ItemState.DONE
@@ -101,6 +107,7 @@ class WorkItem:
     def to_line(self) -> str:
         """Render item back to queue.md line format."""
         checkbox = {"OPEN": " ", "CLAIMED": ">", "PARTIAL": ">",
+                    "COMPETING": "?", "REVIEW": "?",
                     "BLOCKED": " ", "DONE": "x", "CANCELLED": "x"}[self.state.value]
         stamp = self._render_stamp()
         line = f"- [{checkbox}] [{self.id}] [{stamp}] {self.description}"
@@ -130,6 +137,10 @@ class WorkItem:
             return f"CLAIMED · {self.claimed_by} · {_fmt_ts(self.claimed_at)}"
         elif self.state == ItemState.PARTIAL:
             return f"CLAIMED · {self.claimed_by} · {_fmt_ts(self.claimed_at)} · PARTIAL"
+        elif self.state == ItemState.COMPETING:
+            return f"COMPETING · {self.claimed_by} · {_fmt_ts(self.claimed_at)}"
+        elif self.state == ItemState.REVIEW:
+            return f"REVIEW · {self.claimed_by} · {_fmt_ts(self.claimed_at)}"
         elif self.state == ItemState.BLOCKED:
             reason = self.notes.removeprefix("BLOCKED: ") if self.notes else "unknown"
             return f"BLOCKED · {reason}"
@@ -162,6 +173,38 @@ class SwarmState:
 
 
 @dataclass
+class Claim:
+    """A claim file in .swarm/claims/."""
+    item_id: str
+    agent_id: str
+    state: ItemState
+    timestamp: datetime
+    proof: str = ""
+    note: str = ""
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "Claim":
+        return cls(
+            item_id=d["item_id"],
+            agent_id=d["agent_id"],
+            state=ItemState(d["state"]),
+            timestamp=datetime.fromisoformat(d["timestamp"].rstrip("Z")),
+            proof=d.get("proof", ""),
+            note=d.get("note", ""),
+        )
+
+    def to_dict(self) -> dict:
+        return {
+            "item_id": self.item_id,
+            "agent_id": self.agent_id,
+            "state": self.state.value,
+            "timestamp": self.timestamp.isoformat() + "Z",
+            "proof": self.proof,
+            "note": self.note,
+        }
+
+
+@dataclass
 class SwarmPaths:
     """Resolved paths for a .swarm/ directory."""
 
@@ -172,6 +215,7 @@ class SwarmPaths:
     queue: Path
     memory: Path
     workflows: Path
+    claims: Path
 
     @classmethod
     def from_swarm_dir(cls, swarm: Path) -> "SwarmPaths":
@@ -184,6 +228,7 @@ class SwarmPaths:
             queue=swarm / "queue.md",
             memory=swarm / "memory.md",
             workflows=swarm / "workflows",
+            claims=swarm / "claims",
         )
 
     @classmethod
@@ -201,6 +246,7 @@ class SwarmPaths:
                     queue=swarm / "queue.md",
                     memory=swarm / "memory.md",
                     workflows=swarm / "workflows",
+                    claims=swarm / "claims",
                 )
             parent = p.parent
             if parent == p:

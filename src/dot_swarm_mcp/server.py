@@ -28,18 +28,23 @@ import mcp.server.stdio
 import mcp.types as types
 from mcp.server import Server
 
-from dot_swarm.models import Priority, SwarmPaths
+from dot_swarm.models import Priority, SwarmPaths, ItemState
 from dot_swarm.operations import (
     add_item,
     append_memory,
     audit,
+    block_item,
     claim_item,
     done_item,
+    partial_item,
     read_queue,
     read_state,
+    ready_items,
+    reopen_item,
     write_state,
     _division_code_from_paths,
 )
+from dot_swarm.ai_ops import heal
 
 server = Server("dot-swarm")
 
@@ -218,12 +223,66 @@ async def list_tools() -> list[types.Tool]:
             },
         ),
         types.Tool(
-            name="swarm_handoff",
-            description="Generate a handoff document for the next agent or developer.",
+            name="swarm_partial",
+            description="Re-claim an item or attach proof without completing it. Updates queue.md.",
+            inputSchema={
+                "type": "object",
+                "required": ["id", "agent_id"],
+                "properties": {
+                    "id": {"type": "string"},
+                    "agent_id": {"type": "string"},
+                    "note": {"type": "string"},
+                    "proof": {"type": "string", "description": "Worker-supplied evidence (branch, commit, etc.)"},
+                    "path": {"type": "string"},
+                },
+            },
+        ),
+        types.Tool(
+            name="swarm_block",
+            description="Mark an item as BLOCKED with a reason.",
+            inputSchema={
+                "type": "object",
+                "required": ["id", "reason"],
+                "properties": {
+                    "id": {"type": "string"},
+                    "reason": {"type": "string"},
+                    "path": {"type": "string"},
+                },
+            },
+        ),
+        types.Tool(
+            name="swarm_ready",
+            description="List items that are OPEN and have all dependencies completed.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "path": {"type": "string"},
+                },
+            },
+        ),
+        types.Tool(
+            name="swarm_inspect",
+            description="Inspector role: verify worker proof and mark item as --pass (done) or --fail (reopen).",
+            inputSchema={
+                "type": "object",
+                "required": ["id", "inspector_id", "status"],
+                "properties": {
+                    "id": {"type": "string"},
+                    "inspector_id": {"type": "string"},
+                    "status": {"type": "string", "enum": ["pass", "fail"]},
+                    "reason": {"type": "string", "description": "Required if status is fail"},
+                    "path": {"type": "string"},
+                },
+            },
+        ),
+        types.Tool(
+            name="swarm_heal",
+            description="Run a full security scan, alignment check, and trail verification.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "fix": {"type": "boolean", "description": "True to quarantine high-risk files (use with caution)"},
                 },
             },
         ),
@@ -357,6 +416,68 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
             findings = audit(paths, stale_hours=arguments.get("since_hours", 48))
             if not findings:
                 return [types.TextContent(type="text", text="No drift detected.")]
+            return [types.TextContent(type="text", text=json.dumps(findings, indent=2))]
+
+        elif name == "swarm_partial":
+            paths = _resolve_paths(path)
+            item = partial_item(
+                paths, arguments["id"], arguments["agent_id"],
+                arguments.get("note", "")
+            )
+            if proof := arguments.get("proof"):
+                item.proof = proof
+                # Partial doesn't write queue.md by default in the new Claim model, 
+                # but we want to persist the proof if provided via MCP.
+                # Since we are using the new claims logic, partial_item already wrote a claim.
+                # If we need to update the claim with proof, we should handle that.
+                from dot_swarm.models import Claim, ItemState
+                from dot_swarm.operations import write_claim
+                from datetime import datetime
+                write_claim(paths, Claim(
+                    item_id=item.id,
+                    agent_id=arguments["agent_id"],
+                    state=ItemState.PARTIAL,
+                    timestamp=datetime.utcnow(),
+                    proof=proof,
+                    note=arguments.get("note", "")
+                ))
+
+            return [types.TextContent(type="text", text=f"Updated [{item.id}] (PARTIAL): {item.description}")]
+
+        elif name == "swarm_block":
+            paths = _resolve_paths(path)
+            item = block_item(paths, arguments["id"], arguments["reason"])
+            return [types.TextContent(type="text", text=f"Blocked [{item.id}]: {arguments['reason']}")]
+
+        elif name == "swarm_ready":
+            paths = _resolve_paths(path)
+            items = ready_items(paths)
+            result = [
+                {"id": i.id, "description": i.description, "priority": i.priority.value}
+                for i in items
+            ]
+            return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+
+        elif name == "swarm_inspect":
+            paths = _resolve_paths(path)
+            status = arguments["status"]
+            item_id = arguments["id"]
+            inspector_id = arguments["inspector_id"]
+
+            if status == "pass":
+                item = done_item(paths, item_id, inspector_id, "Inspection PASSED")
+                return [types.TextContent(type="text", text=f"Inspection PASSED for [{item_id}]")]
+            else:
+                reason = arguments.get("reason", "No reason provided")
+                item, exhausted = reopen_item(paths, item_id, inspector_id, reason)
+                msg = f"Inspection FAILED for [{item_id}]: {reason}"
+                if exhausted:
+                    msg += " (Max retries exhausted, item BLOCKED)"
+                return [types.TextContent(type="text", text=msg)]
+
+        elif name == "swarm_heal":
+            paths = _resolve_paths(path)
+            findings = heal(paths, fix=arguments.get("fix", False))
             return [types.TextContent(type="text", text=json.dumps(findings, indent=2))]
 
         elif name == "swarm_handoff":
