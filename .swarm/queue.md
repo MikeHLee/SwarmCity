@@ -350,6 +350,11 @@ Item IDs: `SWC-<3-digit-number>` — assigned sequentially, never reused.
       priority: medium
       notes: Add to Quick Start/Installation guide to prevent command-not-found errors. [DOCS-002]
 
+
+- [x] [SWC-042] [DONE · 2026-04-20] Fix CI/CD failures and matrix
+      project: repo-standards
+      priority: high
+      notes: Remove Python 3.10 (unsupported), add anyio to tests, fix MCP test collection.
 <!-- ═══════════════ DISTRIBUTION ═══════════════ -->
 
 - [ ] [SWC-003] [OPEN] Configure Trusted Publishing (OIDC) on PyPI
