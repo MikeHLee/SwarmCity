@@ -1,6 +1,6 @@
 ---
 title: Credits
-nav_order: 5
+nav_order: 6
 ---
 
 # Credits & Inspirations
