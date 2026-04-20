@@ -36,4 +36,11 @@ jobs:
         env:
           PYTHONPATH: src
         run: |
-          pytest
+          pytest --tb=short
+
+      - name: Debug on failure
+        if: failure()
+        run: |
+          echo "Listing .swarm directory if it exists"
+          ls -R .swarm || echo ".swarm not found"
+          echo "Last 50 lines of pytest output would be useful here, but pytest is run in the previous step."

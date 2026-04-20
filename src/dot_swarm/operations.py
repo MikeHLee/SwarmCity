@@ -6,7 +6,10 @@ All reads and writes go through these functions. Write operations are atomic
 
 from __future__ import annotations
 
-import fcntl
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
 import json
 import os
 import re
@@ -117,7 +120,7 @@ def resolve_claims(
             item.notes = (item.notes + " | " + claim.note).strip(" | ")
 
         # Re-sort into lists based on new state
-        if item.state in (ItemState.CLAIMED, ItemState.PARTIAL):
+        if item.state in (ItemState.CLAIMED, ItemState.PARTIAL, ItemState.COMPETING, ItemState.REVIEW):
             if item in pending:
                 pending.remove(item)
                 active.append(item)
@@ -710,9 +713,11 @@ def _atomic_write(path: Path, content: str) -> None:
     fd, tmp_path = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
     try:
         with os.fdopen(fd, "w") as f:
-            fcntl.flock(f, fcntl.LOCK_EX)
+            if fcntl:
+                fcntl.flock(f, fcntl.LOCK_EX)
             f.write(content)
-            fcntl.flock(f, fcntl.LOCK_UN)
+            if fcntl:
+                fcntl.flock(f, fcntl.LOCK_UN)
         os.replace(tmp_path, path)
     except Exception:
         os.unlink(tmp_path)

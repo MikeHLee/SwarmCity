@@ -354,7 +354,7 @@ Item IDs: `SWC-<3-digit-number>` — assigned sequentially, never reused.
 - [x] [SWC-042] [DONE · 2026-04-20] Fix CI/CD failures and matrix
       project: repo-standards
       priority: high
-      notes: Remove Python 3.10 (unsupported), add anyio to tests, fix MCP test collection.
+      notes: Remove Python 3.10 (unsupported), add anyio to tests, fix MCP test collection, fix Windows compatibility, and fix state consistency.
 <!-- ═══════════════ DISTRIBUTION ═══════════════ -->
 
 - [ ] [SWC-003] [OPEN] Configure Trusted Publishing (OIDC) on PyPI

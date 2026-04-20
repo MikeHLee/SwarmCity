@@ -19,6 +19,9 @@ def test_claim_creates_file(swarm_paths):
     item = WorkItem(id="SWC-001", description="Test item", state=ItemState.OPEN)
     write_queue(swarm_paths, [], [item], [])
     
+    # Create claims dir to trigger forward-compatible write
+    swarm_paths.claims.mkdir(parents=True, exist_ok=True)
+    
     # Claim it
     claim_item(swarm_paths, "SWC-001", "agent-1")
     
@@ -39,6 +42,9 @@ def test_done_clears_claims(swarm_paths):
     # Setup initial queue with an item
     item = WorkItem(id="SWC-001", description="Test item", state=ItemState.OPEN)
     write_queue(swarm_paths, [], [item], [])
+    
+    # Create claims dir to trigger forward-compatible write
+    swarm_paths.claims.mkdir(parents=True, exist_ok=True)
     
     # Claim it
     claim_item(swarm_paths, "SWC-001", "agent-1")

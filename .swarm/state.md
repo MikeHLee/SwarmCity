@@ -1,6 +1,6 @@
 # State — dot_swarm
 
-**Last touched**: 2026-04-20T17:03Z by Gemini-CLI
+**Last touched**: 2026-04-20T17:57Z by Gemini-CLI
 **Current focus**: Docs migrated to Jekyll/just-the-docs; README overhauled; roadmap expanded
 **Active items**: (none)
 **Blockers**: PyPI Trusted Publishing not yet configured (manual step for SWC-003)
@@ -10,8 +10,9 @@
 
 ## Handoff Note
 
-**CI/CD Fixes & Version Bump (2026-04-20)**:
-- Removed Python 3.10 from CI matrix (min version is 3.11).
-- Added `anyio` to test dependencies.
-- Made `tests/test_mcp.py` resilient to missing `mcp` module.
-- Version bump to 0.3.2.
+**CI/CD & Compatibility Fixes (2026-04-20)**:
+- Fixed Windows compatibility (optional `fcntl` import and flock guard).
+- Added `anyio` to CI dependencies.
+- Updated `resolve_claims` to handle `COMPETING` and `REVIEW` states.
+- Fixed version inconsistency in `cli.py`.
+- Version bump to 0.3.3.
