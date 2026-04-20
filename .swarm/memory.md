@@ -45,3 +45,56 @@ more awareness and better API feedback than a PyPI package with no documentation
 **Browser simulator / game (Phase 3)**: Deferred until Phase 2 package exists and has traction.
 JS port preferred over Pyodide/WASM for zero load-time and mobile support. Could evolve into
 a casual game where users race to minimize loop error by tuning boid parameters.
+
+---
+
+## 2026-04-19 — swarms.ai integration: transport-agnostic, additive only (human-ML + claude-sonnet-4-6)
+
+**Decision**: The swarms.ai integration (SWC-015) adds four standalone classes to
+`swarms/integrations/dot_swarm/` with no changes to swarms.ai internals. None of the
+four classes require `pip install swarms` to function — the dependency is entirely optional.
+
+**Why**: swarms.ai has no built-in state persistence between runs. dot_swarm fills this
+gap non-invasively. Making the integration one-directional (dot_swarm → swarms.ai, not the
+reverse) keeps the two projects decoupled and makes the PR easier to review and accept.
+
+**Classes**: `DotSwarmStateProvider` (system prompt injection), `DotSwarmWorkflow`
+(runs `.swarm/workflows/*.md`), `DotSwarmTool` (queue operation interface),
+`StigmergicSwarm` (novel indirect-coordination swarm architecture).
+
+**PR not yet opened** — waiting for v0.3.0 PyPI publication (SWC-004) to reference a
+stable package version in the PR description.
+
+---
+
+## 2026-04-19 — trail invisible by default; docs internal notes removed from repo (human-ML + claude-sonnet-4-6)
+
+**Decision**: `swarm init` now defaults to invisible (adds `.swarm/` to `.gitignore`).
+Internal integration and platform docs (SWARMS_AI_PR_GUIDE.md, INTEGRATION_PLAN.md,
+PLATFORM_SETUP.md) removed from `docs/` — content summarised into this memory file
+and into queue.md notes for their respective items.
+
+**Why**: Sharing a repo was silently sharing the full swarm trail (every claim, handoff,
+decision entry). This violates the principle that sharing code should be a separate
+decision from sharing coordination history. The `swarm trail visible/invisible` commands
+(SWC-026) make this explicit and reversible.
+
+**Tradeoff**: First-time users won't see the trail in git by default. They will see a
+"Trail: hidden" note in `swarm init` output directing them to `swarm trail visible`.
+
+---
+
+## 2026-04-19 — docs migrated from MkDocs to Jekyll/just-the-docs; oasis-x color scheme (human-ML + claude-sonnet-4-6)
+
+**Decision**: Switch from MkDocs Material to just-the-docs (Jekyll). Color scheme pulled
+live from dev.o-x.io: #fafafa background, #165f59 teal accent, #009b5c green secondary,
+Montserrat font. Deploy via `peaceiris/actions-gh-pages@v4` to gh-pages branch (no
+GitHub Pages source setting change required).
+
+**Why**: MkDocs Material uses Python and pip in CI; Jekyll is GitHub Pages native and
+requires no separate deploy dependency. just-the-docs is the cleanest docs-focused Jekyll
+theme. The oasis-x aesthetic (minimal, white, teal) is more consistent with the project
+brand than MkDocs Material's dark purple defaults.
+
+**MkDocs-specific syntax converted**: `!!! note/warning/quote` admonitions →
+`{: .note }` / `{: .warning }` callouts; `=== "Tab"` sections → plain H4 headings.
