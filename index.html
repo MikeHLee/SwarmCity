@@ -1,0 +1,473 @@
+<div align="center">
+  <img src="logo_white.gif" alt="dot_swarm" width="420" style="background:#111;border-radius:8px;padding:16px;" />
+  <h1>The .Swarm Protocol</h1>
+  <p><strong>An ecologically-inspired, environment-first coordination protocol for multi-agent AI teams.</strong></p>
+  <p>No central node. No database. No credentials. Agents leave structured traces; the environment does the coordination.</p>
+  <p>
+    <a href="https://oasis-main.github.io/dot_swarm/"><strong>Documentation</strong></a> ·
+    <a href="https://oasis-main.github.io/dot_swarm/CLI_REFERENCE">CLI Reference</a> ·
+    <a href="https://oasis-main.github.io/dot_swarm/ROLES">Agent Roles</a> ·
+    <a href="https://github.com/oasis-main/dot_swarm">GitHub</a>
+  </p>
+</div>
+
+<hr />
+
+<h2 id="whats-in-the-box">What’s in the Box</h2>
+
+<p>dot_swarm is a layered toolkit. Every layer is opt-in — start with zero dependencies and add AI, security, roles, and federation only when you need them.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Layer</th>
+      <th>Commands</th>
+      <th>Install</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Core protocol</strong></td>
+      <td><code class="language-plaintext highlighter-rouge">init</code> <code class="language-plaintext highlighter-rouge">status</code> <code class="language-plaintext highlighter-rouge">add</code> <code class="language-plaintext highlighter-rouge">claim</code> <code class="language-plaintext highlighter-rouge">done</code> <code class="language-plaintext highlighter-rouge">partial</code> <code class="language-plaintext highlighter-rouge">block</code> <code class="language-plaintext highlighter-rouge">ready</code> <code class="language-plaintext highlighter-rouge">handoff</code></td>
+      <td><code class="language-plaintext highlighter-rouge">pip install dot-swarm</code></td>
+    </tr>
+    <tr>
+      <td><strong>Situational awareness</strong></td>
+      <td><code class="language-plaintext highlighter-rouge">ls</code> <code class="language-plaintext highlighter-rouge">explore</code> <code class="language-plaintext highlighter-rouge">report</code> <code class="language-plaintext highlighter-rouge">audit</code> <code class="language-plaintext highlighter-rouge">heal</code> <code class="language-plaintext highlighter-rouge">crawl</code></td>
+      <td>base</td>
+    </tr>
+    <tr>
+      <td><strong>Agent spawning</strong></td>
+      <td><code class="language-plaintext highlighter-rouge">spawn</code> — launch workers and roles in named tmux windows</td>
+      <td>base</td>
+    </tr>
+    <tr>
+      <td><strong>Scheduling &amp; workflows</strong></td>
+      <td><code class="language-plaintext highlighter-rouge">schedule</code> <code class="language-plaintext highlighter-rouge">workflow</code></td>
+      <td>base</td>
+    </tr>
+    <tr>
+      <td><strong>Cross-repo federation</strong></td>
+      <td><code class="language-plaintext highlighter-rouge">federation</code></td>
+      <td>base</td>
+    </tr>
+    <tr>
+      <td><strong>Cryptographic signing</strong></td>
+      <td>auto — every <code class="language-plaintext highlighter-rouge">init</code> generates an HMAC-SHA256 identity</td>
+      <td>base</td>
+    </tr>
+    <tr>
+      <td><strong>AI operations</strong></td>
+      <td><code class="language-plaintext highlighter-rouge">ai</code> <code class="language-plaintext highlighter-rouge">session</code> <code class="language-plaintext highlighter-rouge">configure</code></td>
+      <td><code class="language-plaintext highlighter-rouge">pip install 'dot-swarm[ai]'</code></td>
+    </tr>
+    <tr>
+      <td><strong>Agent roles</strong></td>
+      <td><code class="language-plaintext highlighter-rouge">role</code> <code class="language-plaintext highlighter-rouge">inspect</code> — proof-of-work gate, inspector/supervisor roles</td>
+      <td>base</td>
+    </tr>
+    <tr>
+      <td><strong>MCP server</strong></td>
+      <td><code class="language-plaintext highlighter-rouge">dot-swarm-mcp</code> — Claude Code / Cursor / Windsurf native</td>
+      <td>base</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<h2 id="the-problem-multi-agent-coordination">The Problem: Multi-Agent Coordination</h2>
+
+<p>Modern software teams run multiple AI coding agents simultaneously — Claude Code, Cursor,
+Windsurf, Gemini, opencode — across different repos and sessions. Without coordination:</p>
+
+<ul>
+  <li>Two agents claim and implement the same task simultaneously</li>
+  <li>Context is lost when a chat session ends or a context window is compacted</li>
+  <li>Non-obvious decisions (why approach A over B) disappear with the session</li>
+  <li>The next agent has no idea what the previous one did, decided, or left in-flight</li>
+</ul>
+
+<p>Existing solutions require infrastructure that gets in the way:</p>
+
+<ul>
+  <li><strong>Jira / Linear / GitHub Issues</strong> — web UIs, API credentials, no agent-native format</li>
+  <li><strong>Database-backed tools</strong> — binary files, server processes, another thing to run</li>
+  <li><strong>Slack bots / webhooks</strong> — async, lossy, not git-auditable</li>
+</ul>
+
+<p>The answer isn’t a better tracker. It’s a different model entirely.</p>
+
+<hr />
+
+<h2 id="stigmergic-systems-natures-answer">Stigmergic Systems: Nature’s Answer</h2>
+
+<p>In nature, complex coordination emerges without central controllers.</p>
+
+<p>A bee queen does not dispatch workers or resolve conflicts. She emits chemical markers
+that encode colony state, and workers read those traces autonomously to decide what to
+do next. Ant colonies self-organize task specialization across hundreds of thousands of
+individuals through the same mechanism: <strong>indirect coordination through a shared medium</strong>.
+No bottleneck. No single point of failure. No credentials required.</p>
+
+<p>The key property that makes this work: <strong>all members speak the same chemical language.</strong>
+Every worker interprets the environment the same way. The signal is the protocol.</p>
+
+<p>dot_swarm applies this model directly to software agent fleets:</p>
+
+<blockquote>
+  <p><em>Agents that modify filesystem-native projects should leave traces in their
+environment for collaborative purposes, rather than reporting to a central node
+around which complicated systems must be arranged to prevent bottlenecks and
+data loss from information overload.</em></p>
+</blockquote>
+
+<p>The <code class="language-plaintext highlighter-rouge">.swarm/</code> directory <em>is</em> the shared medium. <code class="language-plaintext highlighter-rouge">state.md</code> <em>is</em> the pheromone trail.
+<code class="language-plaintext highlighter-rouge">BOOTSTRAP.md</code> <em>is</em> the chemical language every agent reads first. Git is the transport.</p>
+
+<p><strong>Signals decay.</strong> <code class="language-plaintext highlighter-rouge">swarm audit</code> flags stale claims. <code class="language-plaintext highlighter-rouge">memory.md</code> entries are dated.
+<code class="language-plaintext highlighter-rouge">state.md</code> timestamps tell any agent exactly how fresh the picture is.</p>
+
+<p>This isn’t another markdown-based task tracker. It’s a <strong>multi-master, environment-first
+coordination protocol</strong> — inspired by six decades of stigmergy research, built for the
+reality that AI agent fleets need to self-organize across repos, sessions, and tools
+without a central authority managing them.</p>
+
+<hr />
+
+<h2 id="how-it-works">How It Works</h2>
+
+<h3 id="the-swarm-directory">The <code class="language-plaintext highlighter-rouge">.swarm/</code> Directory</h3>
+
+<p>Every repository gets a <code class="language-plaintext highlighter-rouge">.swarm/</code> directory. Five files are the protocol core:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>File</th>
+      <th>Role</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">BOOTSTRAP.md</code></td>
+      <td>Universal agent protocol — every agent reads this first</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">context.md</code></td>
+      <td>What this project is, its constraints, its architecture</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">state.md</code></td>
+      <td>Current focus, active items, blockers, handoff note</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">queue.md</code></td>
+      <td>Work items with claim stamps</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">memory.md</code></td>
+      <td>Non-obvious decisions and rationale (append-only)</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Additional opt-in files: <code class="language-plaintext highlighter-rouge">trail.log</code> (signed audit), <code class="language-plaintext highlighter-rouge">schedules.md</code>, <code class="language-plaintext highlighter-rouge">workflows/</code>,
+<code class="language-plaintext highlighter-rouge">federation/</code>, <code class="language-plaintext highlighter-rouge">roles/</code>.</p>
+
+<h3 id="the-claim-pattern">The Claim Pattern</h3>
+
+<p>Work items use inline stamps for optimistic concurrency — no lock server needed:</p>
+
+<div class="language-markdown highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="gu">## Active</span>
+<span class="p">-</span> [&gt;] [API-042] [CLAIMED · claude-code · 2026-03-26T14:30Z] Fix rate limiter memory leak
+      priority: high | project: infra
+
+<span class="gu">## Pending</span>
+<span class="p">-</span> [ ] [API-043] [OPEN] Add distributed tracing to all endpoints
+      priority: medium | project: observability
+      depends: API-042
+
+<span class="gu">## Done</span>
+<span class="p">-</span> [x] [API-041] [DONE · 2026-03-25T16:00Z] Migrate auth middleware to lifespan events
+      project: infra
+</code></pre></div></div>
+
+<h3 id="dependency-aware-work-discovery">Dependency-Aware Work Discovery</h3>
+
+<p><code class="language-plaintext highlighter-rouge">swarm ready</code> shows only items whose entire dependency chain is complete:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm ready          <span class="c"># list what's safe to pick up right now</span>
+swarm ready <span class="nt">--json</span>   <span class="c"># machine-readable, for agent scripts</span>
+</code></pre></div></div>
+
+<h3 id="hierarchical-coordination">Hierarchical Coordination</h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Organization (your-company/)       ← cross-repo initiatives
+  .swarm/
+├── Division (service-a/)          ← single-repo work
+│     .swarm/
+└── Division (service-b/)
+      .swarm/
+</code></pre></div></div>
+
+<p>Work items use level-prefixed IDs: <code class="language-plaintext highlighter-rouge">ORG-001</code>, <code class="language-plaintext highlighter-rouge">API-042</code>, <code class="language-plaintext highlighter-rouge">MOB-017</code>. Cross-division items
+live at org level with <code class="language-plaintext highlighter-rouge">refs:</code> pointers in each affected division’s queue.</p>
+
+<p>Use <code class="language-plaintext highlighter-rouge">swarm ascend</code> and <code class="language-plaintext highlighter-rouge">swarm descend</code> to check alignment across levels.</p>
+
+<hr />
+
+<h2 id="quick-start">Quick Start</h2>
+
+<h4 id="project-management-only">Project management only</h4>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>pip <span class="nb">install </span>dot-swarm
+
+<span class="nb">cd </span>your-repo
+swarm init                    <span class="c"># creates .swarm/ with signing identity</span>
+swarm add <span class="s2">"Fix auth timeout"</span> <span class="nt">--priority</span> high
+swarm add <span class="s2">"Add distributed tracing"</span> <span class="nt">--depends</span> API-001
+swarm ready                   <span class="c"># see what's unblocked right now</span>
+swarm claim API-001
+<span class="c"># ... do work ...</span>
+swarm <span class="k">done </span>API-001 <span class="nt">--note</span> <span class="s2">"Used exponential backoff with jitter"</span>
+swarm handoff                 <span class="c"># structured summary for next agent/human</span>
+</code></pre></div></div>
+
+<h4 id="with-ai-aws-bedrock">With AI (AWS Bedrock)</h4>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>pip <span class="nb">install</span> <span class="s1">'dot-swarm[ai]'</span>
+swarm configure               <span class="c"># set model + region once</span>
+
+swarm ai <span class="s2">"what should I work on next?"</span>
+swarm ai <span class="s2">"implement the auth module, then the markets module"</span> <span class="nt">--chain</span> <span class="nt">--max-steps</span> 6
+</code></pre></div></div>
+
+<h4 id="with-mcp-claude-code--cursor--windsurf">With MCP (Claude Code / Cursor / Windsurf)</h4>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>pip <span class="nb">install </span>dot-swarm
+
+<span class="c"># Add to ~/.claude/mcp_config.json:</span>
+<span class="c"># { "mcpServers": { "dot-swarm": { "command": "dot-swarm-mcp" } } }</span>
+
+<span class="c"># dot_swarm state is now available as MCP tools in your IDE agent</span>
+</code></pre></div></div>
+
+<h4 id="multi-agent-mode-with-spawning-and-roles">Multi-agent mode with spawning and roles</h4>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Enable inspector role — workers must prove completion before done</span>
+swarm role <span class="nb">enable </span>inspector <span class="nt">--max-iterations</span> 3 <span class="nt">--require-proof</span> <span class="s2">"branch,commit,tests"</span>
+
+<span class="c"># Spawn a worker agent in a named tmux window (auto-claims the item)</span>
+swarm spawn API-042 <span class="nt">--agent</span> opencode
+
+<span class="c"># Worker attaches proof then hands off to inspector</span>
+swarm partial API-042 <span class="nt">--proof</span> <span class="s2">"branch:feature/rate-limiter commit:abc1234 tests:87/87"</span>
+
+<span class="c"># Spawn inspector and supervisor as dedicated role windows</span>
+swarm spawn <span class="nt">--role</span> inspector
+swarm spawn <span class="nt">--role</span> supervisor
+
+<span class="c"># Inspector passes or fails with a reason</span>
+swarm inspect API-042 <span class="nt">--pass</span>
+swarm inspect API-042 <span class="nt">--fail</span> <span class="nt">--reason</span> <span class="s2">"Edge case under burst traffic — see test_rate_limiter.py:98"</span>
+
+<span class="c"># If inspect_fails exceeds max_retries, item auto-BLOCKs and surfaces in audit</span>
+swarm audit <span class="nt">--full</span>
+</code></pre></div></div>
+
+<h4 id="directory-cataloging">Directory cataloging</h4>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Walk the working tree and build context for all divisions</span>
+swarm crawl                   <span class="c"># writes Directory Map to context.md</span>
+swarm crawl <span class="nt">--create-items</span>    <span class="c"># also creates queue items for uncatalogued dirs</span>
+swarm heal                    <span class="c"># verify alignment after crawl</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="why-not-a-central-service">Why Not a Central Service?</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Central-node approach</th>
+      <th>Swarm approach</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Agents report in, wait for assignments</td>
+      <td>Agents read environment, self-assign</td>
+    </tr>
+    <tr>
+      <td>Server becomes single point of failure</td>
+      <td><code class="language-plaintext highlighter-rouge">.swarm/</code> files replicated by git</td>
+    </tr>
+    <tr>
+      <td>API credentials required per-agent</td>
+      <td>Plain file access, no auth layer</td>
+    </tr>
+    <tr>
+      <td>Context window dumps to external system</td>
+      <td>Context lives where the code lives</td>
+    </tr>
+    <tr>
+      <td>Bottleneck grows with fleet size</td>
+      <td>Throughput scales with number of agents</td>
+    </tr>
+    <tr>
+      <td>Complex de-duplication logic needed</td>
+      <td>Optimistic claims + audit resolves conflicts</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>dot_swarm is distinct from Gastown/Beads in being <strong>multi-master</strong> (no Mayor
+bottleneck), <strong>feature-toggleable</strong> (every layer is opt-in), and <strong>federation-capable</strong>
+across separate repos and organizations via signed OGP-lite messages.</p>
+
+<hr />
+
+<h2 id="relationship-to-gastown--beads">Relationship to Gastown / Beads</h2>
+
+<p>dot_swarm and Gastown solve overlapping problems with different tradeoffs:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th> </th>
+      <th>dot_swarm</th>
+      <th>Gastown + Beads</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Storage</td>
+      <td>Markdown + git</td>
+      <td>Dolt (version-controlled SQL) + SQLite</td>
+    </tr>
+    <tr>
+      <td>Coordination model</td>
+      <td>Multi-master stigmergy</td>
+      <td>Single Mayor per colony</td>
+    </tr>
+    <tr>
+      <td>Feature toggles</td>
+      <td>Every layer opt-in</td>
+      <td>Fixed architecture</td>
+    </tr>
+    <tr>
+      <td>Cross-org federation</td>
+      <td>OGP-lite signed messages</td>
+      <td>Single workspace</td>
+    </tr>
+    <tr>
+      <td>IDE integration</td>
+      <td>MCP server (native)</td>
+      <td>tmux sessions</td>
+    </tr>
+    <tr>
+      <td>Agent roles</td>
+      <td>inspector / watchdog / supervisor / librarian</td>
+      <td>Mayor / Polecats / Refinery / Witness / Deacon</td>
+    </tr>
+    <tr>
+      <td>Dependencies</td>
+      <td>Zero (stdlib + click + mcp)</td>
+      <td>Dolt + SQLite3 + tmux</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Both are inspired by Steve Yegge’s work and the broader stigmergy literature. dot_swarm
+was specifically designed to work in environments where you cannot install a database,
+and where no single agent should be a required coordinator.</p>
+
+<hr />
+
+<h2 id="security-model">Security Model</h2>
+
+<h3 id="what-protects-your-swarm">What protects your swarm</h3>
+
+<p><strong>Cryptographic identity.</strong> Every <code class="language-plaintext highlighter-rouge">swarm init</code> generates a per-swarm HMAC-SHA256
+signing identity stored in <code class="language-plaintext highlighter-rouge">.swarm/.signing_key</code> (gitignored). All AI operations are
+signed and appended to <code class="language-plaintext highlighter-rouge">trail.log</code>, creating a tamper-evident audit chain.</p>
+
+<p><strong>Adversarial content scanning.</strong> <code class="language-plaintext highlighter-rouge">swarm heal</code> and <code class="language-plaintext highlighter-rouge">swarm audit --security</code> scan all
+<code class="language-plaintext highlighter-rouge">.swarm/</code> files and platform shims (CLAUDE.md, .cursorrules, etc.) for 18 patterns
+across three severity levels:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Level</th>
+      <th>Examples</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>CRITICAL</td>
+      <td>instructions to exfiltrate data, override safety rules, impersonate agents</td>
+    </tr>
+    <tr>
+      <td>HIGH</td>
+      <td>prompt injection in memory/context files, fake claim stamps</td>
+    </tr>
+    <tr>
+      <td>MEDIUM</td>
+      <td>ambiguous authority claims, unusual base64-encoded content</td>
+    </tr>
+  </tbody>
+</table>
+
+<p><strong>Drift detection.</strong> <code class="language-plaintext highlighter-rouge">swarm audit --drift</code> flags any <code class="language-plaintext highlighter-rouge">.swarm/</code> file whose content
+diverges from the signed trail — the earliest signal that an agent has written
+something outside the normal protocol flow.</p>
+
+<p><strong>Trail visibility control.</strong> <code class="language-plaintext highlighter-rouge">swarm trail invisible</code> (the default on <code class="language-plaintext highlighter-rouge">swarm init</code>)
+adds <code class="language-plaintext highlighter-rouge">.swarm/</code> to <code class="language-plaintext highlighter-rouge">.gitignore</code> so your coordination history doesn’t leak when you
+push code. Run <code class="language-plaintext highlighter-rouge">swarm trail visible</code> only when you want to share the trail explicitly.</p>
+
+<h3 id="known-attack-surface">Known attack surface</h3>
+
+<p><strong>Shared medium poisoning.</strong> The <code class="language-plaintext highlighter-rouge">.swarm/</code> directory is the coordination medium — a
+malicious agent that can write to it can influence every other agent that reads it.
+This is the fundamental tradeoff of any stigmergic system. Mitigations: adversarial
+scanner, signed trail, <code class="language-plaintext highlighter-rouge">swarm heal</code> as a continuous integrity pass.</p>
+
+<p><strong>HMAC is local-trust only.</strong> The signing key is per-swarm and never shared. This
+protects trail integrity within a swarm but provides no cross-swarm authentication.
+An Ed25519 upgrade path is documented; HMAC was chosen for zero-dependency stdlib
+compatibility.</p>
+
+<p><strong>Trail sharing equals history sharing.</strong> If you run <code class="language-plaintext highlighter-rouge">swarm trail visible</code> and push,
+your full coordination history — every claim, handoff note, and memory entry — goes
+with it. The default is invisible for this reason.</p>
+
+<p><strong>Live federation is not yet implemented.</strong> Cross-swarm coordination currently works
+via file-based OGP-lite signed messages, not live network connections. Real-time
+inter-swarm signaling is planned if the userbase warrants it.</p>
+
+<p><strong>LLM content is a trust boundary.</strong> Content written by an LLM into <code class="language-plaintext highlighter-rouge">memory.md</code> or
+<code class="language-plaintext highlighter-rouge">notes:</code> fields can influence future agents that read those files. The adversarial
+scanner reduces but does not eliminate this risk — novel injection patterns may evade
+static rules. Treat <code class="language-plaintext highlighter-rouge">swarm heal</code> as a necessary hygiene step after any agentic run.</p>
+
+<p>See <a href="https://oasis-main.github.io/dot_swarm/CLI_REFERENCE">CLI Reference → Security &amp; Trust Model</a> for full command reference.</p>
+
+<hr />
+
+<h2 id="credits">Credits</h2>
+
+<p>Inspired by Steve Yegge’s <a href="https://steve-yegge.medium.com/welcome-to-gas-town-4f25ee16dd04">“Welcome to Gas Town”</a>
+and grounded in stigmergy research spanning six decades, from Grassé’s termite mound
+studies (1959) through Dorigo’s Ant Colony Optimization (1996) to Bonabeau, Dorigo &amp;
+Theraulaz’s <em>Swarm Intelligence</em> (1999).</p>
+
+<hr />
+
+<h2 id="license">License</h2>
+
+<p>MIT — <a href="https://github.com/oasis-main/dot_swarm">github.com/oasis-main/dot_swarm</a></p>
