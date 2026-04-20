@@ -37,7 +37,7 @@ pip <span class="nb">install</span> <span class="s1">'dot-swarm[ai]'</span>     
   </tbody>
 </table>
 
-<p>All commands inherit <code class="language-plaintext highlighter-rouge">--path</code>. Example: <code class="language-plaintext highlighter-rouge">swarm --path ../oasis-cloud status</code></p>
+<p>All commands inherit <code class="language-plaintext highlighter-rouge">--path</code>. Example: <code class="language-plaintext highlighter-rouge">swarm --path ../api-service status</code></p>
 
 <hr />
 
@@ -126,7 +126,7 @@ swarm add <span class="s2">"OAuth2 discovery"</span> <span class="nt">--notes</s
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm add <span class="s2">"Add request ID tracing to all services"</span>
 swarm add <span class="s2">"Fix Redis timeout"</span> <span class="nt">--priority</span> high <span class="nt">--project</span> infra
 swarm add <span class="s2">"OAuth2 discovery"</span> <span class="nt">--notes</span> <span class="s2">"See RFC 8414 for discovery spec"</span>
-swarm add <span class="s2">"Run integration tests"</span> <span class="nt">--depends</span> CLD-042,CLD-043
+swarm add <span class="s2">"Run integration tests"</span> <span class="nt">--depends</span> API-042,API-043
 swarm add <span class="s2">"Implement rate limiter"</span> <span class="nt">--max-retries</span> 5  <span class="c"># override inspector retry limit for this task</span>
 </code></pre></div></div>
 
@@ -142,17 +142,17 @@ inherit the inspector role’s <code class="language-plaintext highlighter-rouge
 
 <p>Claim an item (move Active, stamp with agent ID + timestamp).</p>
 
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm claim CLD-042
-swarm claim CLD-042 <span class="nt">--agent</span> my-agent-id
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm claim API-042
+swarm claim API-042 <span class="nt">--agent</span> my-agent-id
 </code></pre></div></div>
 
 <h3 id="swarm-done"><code class="language-plaintext highlighter-rouge">swarm done</code></h3>
 
 <p>Mark a claimed item as done.</p>
 
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm <span class="k">done </span>CLD-042
-swarm <span class="k">done </span>CLD-042 <span class="nt">--note</span> <span class="s2">"Used converse API instead of invoke-model"</span>
-swarm <span class="k">done </span>CLD-042 <span class="nt">--next</span> <span class="s2">"Pick up CLD-043 next"</span>   <span class="c"># update state.md focus</span>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm <span class="k">done </span>API-042
+swarm <span class="k">done </span>API-042 <span class="nt">--note</span> <span class="s2">"Fixed by switching to sliding window counter"</span>
+swarm <span class="k">done </span>API-042 <span class="nt">--next</span> <span class="s2">"Pick up API-043 next"</span>   <span class="c"># update state.md focus</span>
 </code></pre></div></div>
 
 <blockquote class="warning">
@@ -162,7 +162,7 @@ first, then an inspector agent runs <code class="language-plaintext highlighter-
 as a human director.</p>
 </blockquote>
 
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm <span class="k">done </span>CLD-042 <span class="nt">--force</span>    <span class="c"># human director override</span>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm <span class="k">done </span>API-042 <span class="nt">--force</span>    <span class="c"># human director override</span>
 </code></pre></div></div>
 
 <h3 id="swarm-partial"><code class="language-plaintext highlighter-rouge">swarm partial</code></h3>
@@ -170,12 +170,12 @@ as a human director.</p>
 <p>Checkpoint progress on a claimed item without marking it done. Updates the item’s
 in-progress note and refreshes the claim timestamp.</p>
 
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm partial CLD-042 <span class="nt">--note</span> <span class="s2">"Auth header parsing done, token validation next"</span>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm partial API-042 <span class="nt">--note</span> <span class="s2">"Counter logic done, eviction policy next"</span>
 </code></pre></div></div>
 
 <p><strong>With proof (required when inspector role is enabled):</strong></p>
 
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm partial CLD-042 <span class="nt">--proof</span> <span class="s2">"branch:feature/oauth2 commit:abc1234 tests:42/42"</span>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm partial API-042 <span class="nt">--proof</span> <span class="s2">"branch:feature/rate-limiter commit:abc1234 tests:87/87"</span>
 </code></pre></div></div>
 
 <p>The <code class="language-plaintext highlighter-rouge">--proof</code> value is a space-separated list of <code class="language-plaintext highlighter-rouge">key:value</code> pairs. Required fields
@@ -189,15 +189,15 @@ item unless they are present.</p>
 
 <p>Mark a claimed item as blocked.</p>
 
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm block CLD-042 <span class="s2">"Waiting for staging DB credentials from ops"</span>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm block API-042 <span class="s2">"Waiting for staging environment credentials from ops"</span>
 </code></pre></div></div>
 
 <h3 id="swarm-unblock"><code class="language-plaintext highlighter-rouge">swarm unblock</code></h3>
 
 <p>Clear a blocked item back to Open (or back to Claimed if an agent is specified).</p>
 
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm unblock CLD-042                  <span class="c"># → OPEN</span>
-swarm unblock CLD-042 <span class="nt">--reclaim</span>        <span class="c"># → re-CLAIMED by current agent</span>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm unblock API-042                  <span class="c"># → OPEN</span>
+swarm unblock API-042 <span class="nt">--reclaim</span>        <span class="c"># → re-CLAIMED by current agent</span>
 </code></pre></div></div>
 
 <hr />
@@ -455,7 +455,7 @@ swarm federation apply inbox/msg.json <span class="nt">--yes</span>   <span clas
 
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm schedule add <span class="s1">'0 */6 * * *'</span> <span class="s1">'swarm heal --fix'</span>             <span class="c"># every 6 hours</span>
 swarm schedule add <span class="s1">'6h'</span> <span class="s1">'swarm audit --security'</span> <span class="nt">--name</span> <span class="s1">'Security check'</span>
-swarm schedule add <span class="s1">'on:done CLD-042'</span> <span class="s1">'swarm ai "claim CLD-043"'</span>  <span class="c"># event-driven</span>
+swarm schedule add <span class="s1">'on:done API-042'</span> <span class="s1">'swarm ai "claim API-043"'</span>  <span class="c"># event-driven</span>
 </code></pre></div></div>
 
 <p><strong>Schedule types:</strong></p>
@@ -482,12 +482,12 @@ swarm schedule add <span class="s1">'on:done CLD-042'</span> <span class="s1">'s
     <tr>
       <td><code class="language-plaintext highlighter-rouge">on:done</code></td>
       <td><code class="language-plaintext highlighter-rouge">on:done ITEM-ID</code></td>
-      <td><code class="language-plaintext highlighter-rouge">on:done CLD-042</code></td>
+      <td><code class="language-plaintext highlighter-rouge">on:done API-042</code></td>
     </tr>
     <tr>
       <td><code class="language-plaintext highlighter-rouge">on:blocked</code></td>
       <td><code class="language-plaintext highlighter-rouge">on:blocked ITEM-ID</code></td>
-      <td><code class="language-plaintext highlighter-rouge">on:blocked CLD-042</code></td>
+      <td><code class="language-plaintext highlighter-rouge">on:blocked API-042</code></td>
     </tr>
   </tbody>
 </table>
@@ -533,27 +533,27 @@ swarm schedule run-due
 
 <p>Scaffold a new workflow file.</p>
 
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm workflow create oauth2-flow <span class="nt">--pattern</span> sequential <span class="nt">--trigger</span> <span class="s2">"on:done CLD-041"</span>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm workflow create rate-limiter-rollout <span class="nt">--pattern</span> sequential <span class="nt">--trigger</span> <span class="s2">"on:done API-041"</span>
 swarm workflow create weekly-report <span class="nt">--pattern</span> sequential <span class="nt">--trigger</span> <span class="s2">"0 9 * * 1"</span>
 </code></pre></div></div>
 
 <p>Edit the generated <code class="language-plaintext highlighter-rouge">.swarm/workflows/&lt;name&gt;.md</code>:</p>
 
 <div class="language-markdown highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nn">---</span>
-<span class="na">trigger</span><span class="pi">:</span> <span class="s">on:done CLD-041</span>
+<span class="na">trigger</span><span class="pi">:</span> <span class="s">on:done API-041</span>
 <span class="na">pattern</span><span class="pi">:</span> <span class="s">sequential</span>
-<span class="na">description</span><span class="pi">:</span> <span class="s">OAuth2 integration sequence</span>
+<span class="na">description</span><span class="pi">:</span> <span class="s">Rate limiter implementation sequence</span>
 <span class="nn">---</span>
 
 <span class="gu">## Steps</span>
 <span class="p">
-1.</span> swarm claim CLD-042
+1.</span> swarm claim API-042
    agent: bedrock
    timeout: 30
 <span class="p">
-2.</span> swarm claim CLD-043
+2.</span> swarm claim API-043
    agent: claude
-   depends: CLD-042
+   depends: API-042
    timeout: 45
    if: step1.ok
 <span class="p">
@@ -569,21 +569,21 @@ swarm workflow create weekly-report <span class="nt">--pattern</span> sequential
 
 <h3 id="swarm-workflow-show"><code class="language-plaintext highlighter-rouge">swarm workflow show</code></h3>
 
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm workflow show oauth2-flow
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm workflow show rate-limiter-rollout
 </code></pre></div></div>
 
 <h3 id="swarm-workflow-run"><code class="language-plaintext highlighter-rouge">swarm workflow run</code></h3>
 
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm workflow run oauth2-flow              <span class="c"># confirm before running</span>
-swarm workflow run oauth2-flow <span class="nt">--dry-run</span>    <span class="c"># show steps, no execution</span>
-swarm workflow run oauth2-flow <span class="nt">--yes</span>        <span class="c"># skip confirmation</span>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm workflow run rate-limiter-rollout              <span class="c"># confirm before running</span>
+swarm workflow run rate-limiter-rollout <span class="nt">--dry-run</span>    <span class="c"># show steps, no execution</span>
+swarm workflow run rate-limiter-rollout <span class="nt">--yes</span>        <span class="c"># skip confirmation</span>
 </code></pre></div></div>
 
 <h3 id="swarm-workflow-status"><code class="language-plaintext highlighter-rouge">swarm workflow status</code></h3>
 
 <p>Show last run result from <code class="language-plaintext highlighter-rouge">.swarm/workflow_runs.jsonl</code>.</p>
 
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm workflow status oauth2-flow
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm workflow status rate-limiter-rollout
 </code></pre></div></div>
 
 <hr />
@@ -595,11 +595,11 @@ swarm workflow run oauth2-flow <span class="nt">--yes</span>        <span class=
 <p>Translate a natural-language instruction into <code class="language-plaintext highlighter-rouge">.swarm/</code> operations using an LLM backend.
 Previews proposed changes before executing (unless <code class="language-plaintext highlighter-rouge">--yes</code>).</p>
 
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm ai <span class="s2">"mark CLD-042 as done, merged the OAuth PR"</span>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm ai <span class="s2">"mark API-042 as done, merged the rate limiter PR"</span>
 swarm ai <span class="s2">"what should I work on next?"</span>
-swarm ai <span class="s2">"add three items for rate limiting: design, implement, test"</span>
-swarm ai <span class="s2">"write a memory entry: chose NATS over Kafka for lower latency"</span>
-swarm ai <span class="s2">"update focus to markets ASGI fix"</span> <span class="nt">--yes</span>
+swarm ai <span class="s2">"add three items for distributed tracing: design, implement, test"</span>
+swarm ai <span class="s2">"write a memory entry: chose sliding window over token bucket for burst tolerance"</span>
+swarm ai <span class="s2">"update focus to auth service hardening"</span> <span class="nt">--yes</span>
 
 <span class="c"># With a specific backend:</span>
 swarm ai <span class="s2">"summarise the queue"</span> <span class="nt">--via</span> claude
@@ -615,8 +615,8 @@ swarm ai <span class="s2">"mark done"</span> <span class="nt">--via</span> bedro
 
 <p>Each batch of chained operations is signed and recorded in <code class="language-plaintext highlighter-rouge">trail.log</code>.</p>
 
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm ai <span class="s2">"run the OAuth2 workflow: discovery, token exchange, refresh"</span> <span class="nt">--chain</span> <span class="nt">--yes</span>
-swarm ai <span class="s2">"implement auth, then markets, then geo modules"</span> <span class="nt">--chain</span> <span class="nt">--max-steps</span> 9 <span class="nt">--yes</span>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm ai <span class="s2">"run the rate limiter rollout: design, implement, test, deploy"</span> <span class="nt">--chain</span> <span class="nt">--yes</span>
+swarm ai <span class="s2">"implement auth hardening, then tracing, then dashboard metrics"</span> <span class="nt">--chain</span> <span class="nt">--max-steps</span> 9 <span class="nt">--yes</span>
 swarm ai <span class="s2">"process the full pending queue"</span> <span class="nt">--chain</span> <span class="nt">--max-steps</span> 20 <span class="nt">--yes</span>
 </code></pre></div></div>
 
@@ -714,10 +714,10 @@ proof-of-work and either pass (mark done) or fail (re-open) a work item.</p>
 
 <h3 id="swarm-inspect"><code class="language-plaintext highlighter-rouge">swarm inspect</code></h3>
 
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm inspect CLD-042 <span class="nt">--pass</span>
-swarm inspect CLD-042 <span class="nt">--pass</span> <span class="nt">--note</span> <span class="s2">"Tests pass, code reviewed"</span>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>swarm inspect API-042 <span class="nt">--pass</span>
+swarm inspect API-042 <span class="nt">--pass</span> <span class="nt">--note</span> <span class="s2">"Tests pass, memory profile clean"</span>
 
-swarm inspect CLD-042 <span class="nt">--fail</span> <span class="nt">--reason</span> <span class="s2">"Edge case X not handled — see test_auth.py:142"</span>
+swarm inspect API-042 <span class="nt">--fail</span> <span class="nt">--reason</span> <span class="s2">"Edge case under burst not handled — see test_rate_limiter.py:98"</span>
 </code></pre></div></div>
 
 <table>
@@ -773,10 +773,10 @@ escalation alert is printed.</p>
 Requires <strong>tmux 3.0+</strong> and the chosen agent CLI on PATH.</p>
 
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Worker — claim and open</span>
-swarm spawn SWC-042                          <span class="c"># opencode worker, auto-claims item</span>
-swarm spawn SWC-042 <span class="nt">--agent</span> claude           <span class="c"># Claude Code worker</span>
-swarm spawn SWC-042 <span class="nt">--agent</span> ollama           <span class="c"># local Ollama worker</span>
-swarm spawn SWC-042 <span class="nt">--no-claim</span>               <span class="c"># open window without claiming</span>
+swarm spawn API-042                          <span class="c"># opencode worker, auto-claims item</span>
+swarm spawn API-042 <span class="nt">--agent</span> claude           <span class="c"># Claude Code worker</span>
+swarm spawn API-042 <span class="nt">--agent</span> ollama           <span class="c"># local Ollama worker</span>
+swarm spawn API-042 <span class="nt">--no-claim</span>               <span class="c"># open window without claiming</span>
 
 <span class="c"># Role agents</span>
 swarm spawn <span class="nt">--role</span> inspector                  <span class="c"># inspector monitor window</span>
@@ -784,9 +784,9 @@ swarm spawn <span class="nt">--role</span> supervisor                 <span clas
 swarm spawn <span class="nt">--role</span> watchdog                   <span class="c"># watchdog audit loop</span>
 
 <span class="c"># Session control</span>
-swarm spawn SWC-042 <span class="nt">--session</span> my-project     <span class="c"># custom tmux session name</span>
-swarm spawn SWC-042 <span class="nt">--window-name</span> auth-fix   <span class="c"># custom window name</span>
-swarm spawn SWC-042 <span class="nt">--agent-id</span> my-agent-42   <span class="c"># explicit SWARM_AGENT_ID</span>
+swarm spawn API-042 <span class="nt">--session</span> my-project     <span class="c"># custom tmux session name</span>
+swarm spawn API-042 <span class="nt">--window-name</span> rate-limiter-fix   <span class="c"># custom window name</span>
+swarm spawn API-042 <span class="nt">--agent-id</span> my-agent-42   <span class="c"># explicit SWARM_AGENT_ID</span>
 </code></pre></div></div>
 
 <table>
@@ -858,7 +858,7 @@ swarm spawn SWC-042 <span class="nt">--agent-id</span> my-agent-42   <span class
 
 <p><strong>Attach / navigate:</strong></p>
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>tmux attach <span class="nt">-t</span> swarm                     <span class="c"># attach to session</span>
-tmux <span class="k">select</span><span class="nt">-window</span> <span class="nt">-t</span> swarm:SWC-042      <span class="c"># switch to window</span>
+tmux <span class="k">select</span><span class="nt">-window</span> <span class="nt">-t</span> swarm:API-042      <span class="c"># switch to window</span>
 tmux list-windows <span class="nt">-t</span> swarm               <span class="c"># list all windows</span>
 </code></pre></div></div>
 
@@ -938,11 +938,11 @@ swarm crawl <span class="nt">--dry-run</span>        <span class="c"># preview w
 <code class="language-plaintext highlighter-rouge">.git/</code>, <code class="language-plaintext highlighter-rouge">__pycache__/</code>, <code class="language-plaintext highlighter-rouge">node_modules/</code>, <code class="language-plaintext highlighter-rouge">.venv/</code>, <code class="language-plaintext highlighter-rouge">venv/</code>, <code class="language-plaintext highlighter-rouge">dist/</code>, <code class="language-plaintext highlighter-rouge">build/</code></p>
 
 <p><strong>Example output:</strong></p>
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Crawled /Users/me/oasis-cloud
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Crawled /Users/me/api-service
 
   Swarm divisions found (2) — skipped:
     services/auth/
-    services/markets/
+    services/payments/
 
   Catalogued (4 dirs):
     docs/ — 12 files (8×.md, 3×.png, 1×.svg)
@@ -1033,48 +1033,36 @@ swarm setup-drift-check <span class="nt">--commit</span>  <span class="c"># also
       <td><code class="language-plaintext highlighter-rouge">ORG</code></td>
     </tr>
     <tr>
-      <td>oasis-cloud</td>
-      <td><code class="language-plaintext highlighter-rouge">CLD</code></td>
+      <td>api-service</td>
+      <td><code class="language-plaintext highlighter-rouge">API</code></td>
     </tr>
     <tr>
-      <td>oasis-cloud-admin</td>
-      <td><code class="language-plaintext highlighter-rouge">ADM</code></td>
+      <td>auth-service</td>
+      <td><code class="language-plaintext highlighter-rouge">AUTH</code></td>
     </tr>
     <tr>
-      <td>oasis-weather</td>
-      <td><code class="language-plaintext highlighter-rouge">WTH</code></td>
+      <td>dashboard</td>
+      <td><code class="language-plaintext highlighter-rouge">DASH</code></td>
     </tr>
     <tr>
-      <td>oasis-firmware</td>
+      <td>mobile-app</td>
+      <td><code class="language-plaintext highlighter-rouge">MOB</code></td>
+    </tr>
+    <tr>
+      <td>firmware</td>
       <td><code class="language-plaintext highlighter-rouge">FW</code></td>
     </tr>
     <tr>
-      <td>oasis-home</td>
-      <td><code class="language-plaintext highlighter-rouge">HM</code></td>
+      <td>docs</td>
+      <td><code class="language-plaintext highlighter-rouge">DOC</code></td>
     </tr>
     <tr>
-      <td>oasis-ui</td>
-      <td><code class="language-plaintext highlighter-rouge">UI</code></td>
+      <td>infra</td>
+      <td><code class="language-plaintext highlighter-rouge">INF</code></td>
     </tr>
     <tr>
-      <td>oasis-forms</td>
-      <td><code class="language-plaintext highlighter-rouge">FRM</code></td>
-    </tr>
-    <tr>
-      <td>oasis-hardware</td>
-      <td><code class="language-plaintext highlighter-rouge">HW</code></td>
-    </tr>
-    <tr>
-      <td>oasis-welcome</td>
-      <td><code class="language-plaintext highlighter-rouge">WEB</code></td>
-    </tr>
-    <tr>
-      <td>oasis-cloud-wiki</td>
-      <td><code class="language-plaintext highlighter-rouge">WIKI</code></td>
-    </tr>
-    <tr>
-      <td>oasis-records</td>
-      <td><code class="language-plaintext highlighter-rouge">REC</code></td>
+      <td>homelab</td>
+      <td><code class="language-plaintext highlighter-rouge">LAB</code></td>
     </tr>
     <tr>
       <td>dot_swarm</td>

@@ -107,17 +107,17 @@ Work items use inline stamps for optimistic concurrency — no lock server neede
 
 ```markdown
 ## Active
-- [>] [CLD-042] [CLAIMED · claude-code · 2026-03-26T14:30Z] Fix Redis timeout
-      priority: high | project: cloud-stability
+- [>] [API-042] [CLAIMED · claude-code · 2026-03-26T14:30Z] Fix rate limiter memory leak
+      priority: high | project: infra
 
 ## Pending
-- [ ] [CLD-043] [OPEN] Add request ID tracing to all services
+- [ ] [API-043] [OPEN] Add distributed tracing to all endpoints
       priority: medium | project: observability
-      depends: CLD-042
+      depends: API-042
 
 ## Done
-- [x] [CLD-041] [DONE · 2026-03-25T16:00Z] Update auth health check path
-      project: cloud-stability
+- [x] [API-041] [DONE · 2026-03-25T16:00Z] Migrate auth middleware to lifespan events
+      project: infra
 ```
 
 ### Dependency-Aware Work Discovery
@@ -140,7 +140,7 @@ Organization (your-company/)       ← cross-repo initiatives
       .swarm/
 ```
 
-Work items use level-prefixed IDs: `ORG-001`, `CLD-042`, `FW-017`. Cross-division items
+Work items use level-prefixed IDs: `ORG-001`, `API-042`, `MOB-017`. Cross-division items
 live at org level with `refs:` pointers in each affected division's queue.
 
 Use `swarm ascend` and `swarm descend` to check alignment across levels.
@@ -157,11 +157,11 @@ pip install dot-swarm
 cd your-repo
 swarm init                    # creates .swarm/ with signing identity
 swarm add "Fix auth timeout" --priority high
-swarm add "Add rate limiting" --depends CLD-001
+swarm add "Add distributed tracing" --depends API-001
 swarm ready                   # see what's unblocked right now
-swarm claim CLD-001
+swarm claim API-001
 # ... do work ...
-swarm done CLD-001 --note "Used exponential backoff"
+swarm done API-001 --note "Used exponential backoff with jitter"
 swarm handoff                 # structured summary for next agent/human
 ```
 
@@ -193,18 +193,18 @@ pip install dot-swarm
 swarm role enable inspector --max-iterations 3 --require-proof "branch,commit,tests"
 
 # Spawn a worker agent in a named tmux window (auto-claims the item)
-swarm spawn SWC-042 --agent opencode
+swarm spawn API-042 --agent opencode
 
 # Worker attaches proof then hands off to inspector
-swarm partial SWC-042 --proof "branch:feature/oauth2 commit:abc1234 tests:42/42"
+swarm partial API-042 --proof "branch:feature/rate-limiter commit:abc1234 tests:87/87"
 
 # Spawn inspector and supervisor as dedicated role windows
 swarm spawn --role inspector
 swarm spawn --role supervisor
 
 # Inspector passes or fails with a reason
-swarm inspect SWC-042 --pass
-swarm inspect SWC-042 --fail --reason "Edge case in token refresh — see test_auth.py:142"
+swarm inspect API-042 --pass
+swarm inspect API-042 --fail --reason "Edge case under burst traffic — see test_rate_limiter.py:98"
 
 # If inspect_fails exceeds max_retries, item auto-BLOCKs and surfaces in audit
 swarm audit --full
