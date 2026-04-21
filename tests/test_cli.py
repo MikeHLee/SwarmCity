@@ -136,7 +136,7 @@ def test_report_to_file(tmp_path: Path) -> None:
     result = runner.invoke(cli, ["--path", str(tmp_path), "report", "--out", str(out_file)])
     assert result.exit_code == 0
     assert out_file.exists()
-    assert "dot_swarm Colony Report" in out_file.read_text()
+    assert "dot_swarm Colony Report" in out_file.read_text(encoding='utf-8')
 
 
 # ---------------------------------------------------------------------------

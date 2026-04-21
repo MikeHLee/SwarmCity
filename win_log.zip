@@ -1,0 +1,449 @@
+﻿2026-04-20T22:21:57.4721324Z Current runner version: '2.333.1'
+2026-04-20T22:21:57.4748584Z ##[group]Runner Image Provisioner
+2026-04-20T22:21:57.4749404Z Hosted Compute Agent
+2026-04-20T22:21:57.4749930Z Version: 20260213.493
+2026-04-20T22:21:57.4750458Z Commit: 5c115507f6dd24b8de37d8bbe0bb4509d0cc0fa3
+2026-04-20T22:21:57.4751128Z Build Date: 2026-02-13T00:28:41Z
+2026-04-20T22:21:57.4751715Z Worker ID: {a4ed0826-112c-45e4-ae06-9b6363f8353f}
+2026-04-20T22:21:57.4752352Z Azure Region: eastus2
+2026-04-20T22:21:57.4753496Z ##[endgroup]
+2026-04-20T22:21:57.4755327Z ##[group]Operating System
+2026-04-20T22:21:57.4756179Z Microsoft Windows Server 2025
+2026-04-20T22:21:57.4756912Z 10.0.26100
+2026-04-20T22:21:57.4757549Z Datacenter
+2026-04-20T22:21:57.4758113Z ##[endgroup]
+2026-04-20T22:21:57.4758783Z ##[group]Runner Image
+2026-04-20T22:21:57.4759498Z Image: windows-2025
+2026-04-20T22:21:57.4760170Z Version: 20260413.84.1
+2026-04-20T22:21:57.4762178Z Included Software: https://github.com/actions/runner-images/blob/win25/20260413.84/images/windows/Windows2025-Readme.md
+2026-04-20T22:21:57.4764184Z Image Release: https://github.com/actions/runner-images/releases/tag/win25%2F20260413.84
+2026-04-20T22:21:57.4765027Z ##[endgroup]
+2026-04-20T22:21:57.4766095Z ##[group]GITHUB_TOKEN Permissions
+2026-04-20T22:21:57.4767995Z Contents: read
+2026-04-20T22:21:57.4768520Z Metadata: read
+2026-04-20T22:21:57.4768944Z Packages: read
+2026-04-20T22:21:57.4769389Z ##[endgroup]
+2026-04-20T22:21:57.4771492Z Secret source: Actions
+2026-04-20T22:21:57.4772153Z Prepare workflow directory
+2026-04-20T22:21:57.5179014Z Prepare all required actions
+2026-04-20T22:21:57.5218347Z Getting action download info
+2026-04-20T22:21:57.7790867Z Download action repository 'actions/checkout@v4' (SHA:34e114876b0b11c390a56381ad16ebd13914f8d5)
+2026-04-20T22:21:57.9045485Z Download action repository 'actions/setup-python@v5' (SHA:a26af69be951a213d495a4c3e4e4022e16d87065)
+2026-04-20T22:21:58.1788991Z Complete job name: windows-latest / Python 3.12
+2026-04-20T22:21:58.3270047Z ##[group]Run actions/checkout@v4
+2026-04-20T22:21:58.3271065Z with:
+2026-04-20T22:21:58.3271428Z   repository: oasis-main/dot_swarm
+2026-04-20T22:21:58.3272136Z   token: ***
+2026-04-20T22:21:58.3272473Z   ssh-strict: true
+2026-04-20T22:21:58.3272825Z   ssh-user: git
+2026-04-20T22:21:58.3273173Z   persist-credentials: true
+2026-04-20T22:21:58.3273569Z   clean: true
+2026-04-20T22:21:58.3273912Z   sparse-checkout-cone-mode: true
+2026-04-20T22:21:58.3274338Z   fetch-depth: 1
+2026-04-20T22:21:58.3274665Z   fetch-tags: false
+2026-04-20T22:21:58.3275412Z   show-progress: true
+2026-04-20T22:21:58.3275764Z   lfs: false
+2026-04-20T22:21:58.3276091Z   submodules: false
+2026-04-20T22:21:58.3276435Z   set-safe-directory: true
+2026-04-20T22:21:58.3277079Z ##[endgroup]
+2026-04-20T22:21:58.4997026Z Syncing repository: oasis-main/dot_swarm
+2026-04-20T22:21:58.5000659Z ##[group]Getting Git version info
+2026-04-20T22:21:58.5002315Z Working directory is 'D:\a\dot_swarm\dot_swarm'
+2026-04-20T22:21:58.5942236Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-04-20T22:21:58.9293504Z git version 2.53.0.windows.2
+2026-04-20T22:21:58.9359764Z ##[endgroup]
+2026-04-20T22:21:58.9386052Z Temporarily overriding HOME='D:\a\_temp\1acfefd5-ef1f-4547-aa10-023d1a68c66a' before making global git config changes
+2026-04-20T22:21:58.9388236Z Adding repository directory to the temporary git global config as a safe directory
+2026-04-20T22:21:58.9398547Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\dot_swarm\dot_swarm
+2026-04-20T22:21:58.9981341Z Deleting the contents of 'D:\a\dot_swarm\dot_swarm'
+2026-04-20T22:21:58.9988900Z ##[group]Initializing the repository
+2026-04-20T22:21:58.9999407Z [command]"C:\Program Files\Git\bin\git.exe" init D:\a\dot_swarm\dot_swarm
+2026-04-20T22:21:59.0886309Z Initialized empty Git repository in D:/a/dot_swarm/dot_swarm/.git/
+2026-04-20T22:21:59.0936588Z [command]"C:\Program Files\Git\bin\git.exe" remote add origin https://github.com/oasis-main/dot_swarm
+2026-04-20T22:21:59.1463587Z ##[endgroup]
+2026-04-20T22:21:59.1464696Z ##[group]Disabling automatic garbage collection
+2026-04-20T22:21:59.1474770Z [command]"C:\Program Files\Git\bin\git.exe" config --local gc.auto 0
+2026-04-20T22:21:59.1781831Z ##[endgroup]
+2026-04-20T22:21:59.1782871Z ##[group]Setting up auth
+2026-04-20T22:21:59.1801909Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-04-20T22:21:59.2107461Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-04-20T22:22:00.6089938Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-04-20T22:22:00.6413245Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-04-20T22:22:01.2036430Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-04-20T22:22:01.2350878Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-04-20T22:22:01.8388811Z [command]"C:\Program Files\Git\bin\git.exe" config --local http.https://github.com/.extraheader "AUTHORIZATION: basic ***"
+2026-04-20T22:22:01.8741771Z ##[endgroup]
+2026-04-20T22:22:01.8742260Z ##[group]Fetching the repository
+2026-04-20T22:22:01.8757599Z [command]"C:\Program Files\Git\bin\git.exe" -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +8c1795209a6ddff416aaf488d68163fdee38531c:refs/remotes/origin/main
+2026-04-20T22:22:03.5766417Z From https://github.com/oasis-main/dot_swarm
+2026-04-20T22:22:03.5769987Z  * [new ref]         8c1795209a6ddff416aaf488d68163fdee38531c -> origin/main
+2026-04-20T22:22:03.6249794Z ##[endgroup]
+2026-04-20T22:22:03.6250409Z ##[group]Determining the checkout info
+2026-04-20T22:22:03.6253489Z ##[endgroup]
+2026-04-20T22:22:03.6265489Z [command]"C:\Program Files\Git\bin\git.exe" sparse-checkout disable
+2026-04-20T22:22:03.6719309Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all extensions.worktreeConfig
+2026-04-20T22:22:03.7060848Z ##[group]Checking out the ref
+2026-04-20T22:22:03.7061481Z [command]"C:\Program Files\Git\bin\git.exe" checkout --progress --force -B main refs/remotes/origin/main
+2026-04-20T22:22:03.9714616Z Switched to a new branch 'main'
+2026-04-20T22:22:03.9780578Z branch 'main' set up to track 'origin/main'.
+2026-04-20T22:22:03.9832865Z ##[endgroup]
+2026-04-20T22:22:04.0264603Z [command]"C:\Program Files\Git\bin\git.exe" log -1 --format=%H
+2026-04-20T22:22:04.0555422Z 8c1795209a6ddff416aaf488d68163fdee38531c
+2026-04-20T22:22:04.0995051Z ##[group]Run actions/setup-python@v5
+2026-04-20T22:22:04.0995411Z with:
+2026-04-20T22:22:04.0995580Z   python-version: 3.12
+2026-04-20T22:22:04.0995792Z   check-latest: false
+2026-04-20T22:22:04.0996171Z   token: ***
+2026-04-20T22:22:04.0996348Z   update-environment: true
+2026-04-20T22:22:04.0996674Z   allow-prereleases: false
+2026-04-20T22:22:04.0996988Z   freethreaded: false
+2026-04-20T22:22:04.0997174Z ##[endgroup]
+2026-04-20T22:22:04.3297463Z ##[group]Installed versions
+2026-04-20T22:22:04.3786937Z Successfully set up CPython (3.12.10)
+2026-04-20T22:22:04.3787795Z ##[endgroup]
+2026-04-20T22:22:04.4084964Z ##[group]Run python -m pip install --upgrade pip
+2026-04-20T22:22:04.4085491Z [36;1mpython -m pip install --upgrade pip[0m
+2026-04-20T22:22:04.4085831Z [36;1mpip install .[ai] pytest anyio[0m
+2026-04-20T22:22:04.4859092Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-04-20T22:22:04.4859466Z env:
+2026-04-20T22:22:04.4859727Z   pythonLocation: C:\hostedtoolcache\windows\Python\3.12.10\x64
+2026-04-20T22:22:04.4861061Z   PKG_CONFIG_PATH: C:\hostedtoolcache\windows\Python\3.12.10\x64/lib/pkgconfig
+2026-04-20T22:22:04.4861874Z   Python_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.12.10\x64
+2026-04-20T22:22:04.4862329Z   Python2_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.12.10\x64
+2026-04-20T22:22:04.4862733Z   Python3_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.12.10\x64
+2026-04-20T22:22:04.4863050Z ##[endgroup]
+2026-04-20T22:22:13.3265745Z Requirement already satisfied: pip in C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages (26.0.1)
+2026-04-20T22:22:15.2873849Z Processing .\.
+2026-04-20T22:22:15.2910442Z   Installing build dependencies: started
+2026-04-20T22:22:18.0664141Z   Installing build dependencies: finished with status 'done'
+2026-04-20T22:22:18.0681452Z   Getting requirements to build wheel: started
+2026-04-20T22:22:18.9810137Z   Getting requirements to build wheel: finished with status 'done'
+2026-04-20T22:22:18.9840285Z   Preparing metadata (pyproject.toml): started
+2026-04-20T22:22:19.2973292Z   Preparing metadata (pyproject.toml): finished with status 'done'
+2026-04-20T22:22:19.6630686Z Collecting pytest
+2026-04-20T22:22:19.8831202Z   Downloading pytest-9.0.3-py3-none-any.whl.metadata (7.6 kB)
+2026-04-20T22:22:19.9462034Z Collecting anyio
+2026-04-20T22:22:19.9557621Z   Downloading anyio-4.13.0-py3-none-any.whl.metadata (4.5 kB)
+2026-04-20T22:22:19.9830104Z Requirement already satisfied: click>=8.1 in C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages (from dot-swarm==0.3.3) (8.3.2)
+2026-04-20T22:22:20.0201261Z Collecting mcp>=1.0 (from dot-swarm==0.3.3)
+2026-04-20T22:22:20.0322497Z   Downloading mcp-1.27.0-py3-none-any.whl.metadata (8.2 kB)
+2026-04-20T22:22:20.3133992Z Collecting boto3>=1.34 (from dot-swarm==0.3.3)
+2026-04-20T22:22:20.3228338Z   Downloading boto3-1.42.92-py3-none-any.whl.metadata (6.7 kB)
+2026-04-20T22:22:20.3489869Z Requirement already satisfied: colorama>=0.4 in C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages (from pytest) (0.4.6)
+2026-04-20T22:22:20.3792827Z Collecting iniconfig>=1.0.1 (from pytest)
+2026-04-20T22:22:20.3890073Z   Downloading iniconfig-2.3.0-py3-none-any.whl.metadata (2.5 kB)
+2026-04-20T22:22:20.4182982Z Requirement already satisfied: packaging>=22 in C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages (from pytest) (26.0)
+2026-04-20T22:22:20.4464123Z Collecting pluggy<2,>=1.5 (from pytest)
+2026-04-20T22:22:20.4547457Z   Downloading pluggy-1.6.0-py3-none-any.whl.metadata (4.8 kB)
+2026-04-20T22:22:20.5152369Z Collecting pygments>=2.7.2 (from pytest)
+2026-04-20T22:22:20.5245630Z   Downloading pygments-2.20.0-py3-none-any.whl.metadata (2.5 kB)
+2026-04-20T22:22:20.5731247Z Collecting idna>=2.8 (from anyio)
+2026-04-20T22:22:20.5838111Z   Downloading idna-3.11-py3-none-any.whl.metadata (8.4 kB)
+2026-04-20T22:22:20.6348373Z Collecting typing_extensions>=4.5 (from anyio)
+2026-04-20T22:22:20.6438980Z   Downloading typing_extensions-4.15.0-py3-none-any.whl.metadata (3.3 kB)
+2026-04-20T22:22:20.8794950Z Collecting botocore<1.43.0,>=1.42.92 (from boto3>=1.34->dot-swarm==0.3.3)
+2026-04-20T22:22:20.8889648Z   Downloading botocore-1.42.92-py3-none-any.whl.metadata (5.9 kB)
+2026-04-20T22:22:20.9407175Z Collecting jmespath<2.0.0,>=0.7.1 (from boto3>=1.34->dot-swarm==0.3.3)
+2026-04-20T22:22:20.9491081Z   Downloading jmespath-1.1.0-py3-none-any.whl.metadata (7.6 kB)
+2026-04-20T22:22:20.9988431Z Collecting s3transfer<0.17.0,>=0.16.0 (from boto3>=1.34->dot-swarm==0.3.3)
+2026-04-20T22:22:21.0075063Z   Downloading s3transfer-0.16.0-py3-none-any.whl.metadata (1.7 kB)
+2026-04-20T22:22:21.0555164Z Collecting python-dateutil<3.0.0,>=2.1 (from botocore<1.43.0,>=1.42.92->boto3>=1.34->dot-swarm==0.3.3)
+2026-04-20T22:22:21.0652773Z   Downloading python_dateutil-2.9.0.post0-py2.py3-none-any.whl.metadata (8.4 kB)
+2026-04-20T22:22:21.1198703Z Collecting urllib3!=2.2.0,<3,>=1.25.4 (from botocore<1.43.0,>=1.42.92->boto3>=1.34->dot-swarm==0.3.3)
+2026-04-20T22:22:21.1282503Z   Downloading urllib3-2.6.3-py3-none-any.whl.metadata (6.9 kB)
+2026-04-20T22:22:21.1840280Z Collecting six>=1.5 (from python-dateutil<3.0.0,>=2.1->botocore<1.43.0,>=1.42.92->boto3>=1.34->dot-swarm==0.3.3)
+2026-04-20T22:22:21.1924980Z   Downloading six-1.17.0-py2.py3-none-any.whl.metadata (1.7 kB)
+2026-04-20T22:22:21.2670007Z Collecting httpx-sse>=0.4 (from mcp>=1.0->dot-swarm==0.3.3)
+2026-04-20T22:22:21.2768732Z   Downloading httpx_sse-0.4.3-py3-none-any.whl.metadata (9.7 kB)
+2026-04-20T22:22:21.3384769Z Collecting httpx>=0.27.1 (from mcp>=1.0->dot-swarm==0.3.3)
+2026-04-20T22:22:21.3502007Z   Downloading httpx-0.28.1-py3-none-any.whl.metadata (7.1 kB)
+2026-04-20T22:22:21.4089083Z Collecting jsonschema>=4.20.0 (from mcp>=1.0->dot-swarm==0.3.3)
+2026-04-20T22:22:21.4179352Z   Downloading jsonschema-4.26.0-py3-none-any.whl.metadata (7.6 kB)
+2026-04-20T22:22:21.4714822Z Collecting pydantic-settings>=2.5.2 (from mcp>=1.0->dot-swarm==0.3.3)
+2026-04-20T22:22:21.4806369Z   Downloading pydantic_settings-2.14.0-py3-none-any.whl.metadata (3.4 kB)
+2026-04-20T22:22:21.6748537Z Collecting pydantic<3.0.0,>=2.11.0 (from mcp>=1.0->dot-swarm==0.3.3)
+2026-04-20T22:22:21.6859770Z   Downloading pydantic-2.13.3-py3-none-any.whl.metadata (108 kB)
+2026-04-20T22:22:21.7511553Z Collecting pyjwt>=2.10.1 (from pyjwt[crypto]>=2.10.1->mcp>=1.0->dot-swarm==0.3.3)
+2026-04-20T22:22:21.7601554Z   Downloading pyjwt-2.12.1-py3-none-any.whl.metadata (4.1 kB)
+2026-04-20T22:22:21.8112956Z Collecting python-multipart>=0.0.9 (from mcp>=1.0->dot-swarm==0.3.3)
+2026-04-20T22:22:21.8203472Z   Downloading python_multipart-0.0.26-py3-none-any.whl.metadata (2.1 kB)
+2026-04-20T22:22:21.8853526Z Collecting pywin32>=310 (from mcp>=1.0->dot-swarm==0.3.3)
+2026-04-20T22:22:21.8947843Z   Downloading pywin32-311-cp312-cp312-win_amd64.whl.metadata (10 kB)
+2026-04-20T22:22:21.9488047Z Collecting sse-starlette>=1.6.1 (from mcp>=1.0->dot-swarm==0.3.3)
+2026-04-20T22:22:21.9575090Z   Downloading sse_starlette-3.3.4-py3-none-any.whl.metadata (14 kB)
+2026-04-20T22:22:22.0193910Z Collecting starlette>=0.27 (from mcp>=1.0->dot-swarm==0.3.3)
+2026-04-20T22:22:22.0284892Z   Downloading starlette-1.0.0-py3-none-any.whl.metadata (6.3 kB)
+2026-04-20T22:22:22.0785264Z Collecting typing-inspection>=0.4.1 (from mcp>=1.0->dot-swarm==0.3.3)
+2026-04-20T22:22:22.0875588Z   Downloading typing_inspection-0.4.2-py3-none-any.whl.metadata (2.6 kB)
+2026-04-20T22:22:22.1444494Z Collecting uvicorn>=0.31.1 (from mcp>=1.0->dot-swarm==0.3.3)
+2026-04-20T22:22:22.1565022Z   Downloading uvicorn-0.44.0-py3-none-any.whl.metadata (6.7 kB)
+2026-04-20T22:22:22.2069714Z Collecting annotated-types>=0.6.0 (from pydantic<3.0.0,>=2.11.0->mcp>=1.0->dot-swarm==0.3.3)
+2026-04-20T22:22:22.2154712Z   Downloading annotated_types-0.7.0-py3-none-any.whl.metadata (15 kB)
+2026-04-20T22:22:22.8600453Z Collecting pydantic-core==2.46.3 (from pydantic<3.0.0,>=2.11.0->mcp>=1.0->dot-swarm==0.3.3)
+2026-04-20T22:22:22.8695976Z   Downloading pydantic_core-2.46.3-cp312-cp312-win_amd64.whl.metadata (6.7 kB)
+2026-04-20T22:22:22.9413188Z Collecting certifi (from httpx>=0.27.1->mcp>=1.0->dot-swarm==0.3.3)
+2026-04-20T22:22:22.9504299Z   Downloading certifi-2026.2.25-py3-none-any.whl.metadata (2.5 kB)
+2026-04-20T22:22:23.0091801Z Collecting httpcore==1.* (from httpx>=0.27.1->mcp>=1.0->dot-swarm==0.3.3)
+2026-04-20T22:22:23.0217884Z   Downloading httpcore-1.0.9-py3-none-any.whl.metadata (21 kB)
+2026-04-20T22:22:23.0735282Z Collecting h11>=0.16 (from httpcore==1.*->httpx>=0.27.1->mcp>=1.0->dot-swarm==0.3.3)
+2026-04-20T22:22:23.0823362Z   Downloading h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+2026-04-20T22:22:23.1378087Z Collecting attrs>=22.2.0 (from jsonschema>=4.20.0->mcp>=1.0->dot-swarm==0.3.3)
+2026-04-20T22:22:23.1462637Z   Downloading attrs-26.1.0-py3-none-any.whl.metadata (8.8 kB)
+2026-04-20T22:22:23.2172430Z Collecting jsonschema-specifications>=2023.03.6 (from jsonschema>=4.20.0->mcp>=1.0->dot-swarm==0.3.3)
+2026-04-20T22:22:23.2264005Z   Downloading jsonschema_specifications-2025.9.1-py3-none-any.whl.metadata (2.9 kB)
+2026-04-20T22:22:23.2930250Z Collecting referencing>=0.28.4 (from jsonschema>=4.20.0->mcp>=1.0->dot-swarm==0.3.3)
+2026-04-20T22:22:23.3029539Z   Downloading referencing-0.37.0-py3-none-any.whl.metadata (2.8 kB)
+2026-04-20T22:22:23.5622586Z Collecting rpds-py>=0.25.0 (from jsonschema>=4.20.0->mcp>=1.0->dot-swarm==0.3.3)
+2026-04-20T22:22:23.5746738Z   Downloading rpds_py-0.30.0-cp312-cp312-win_amd64.whl.metadata (4.2 kB)
+2026-04-20T22:22:23.6309877Z Collecting python-dotenv>=0.21.0 (from pydantic-settings>=2.5.2->mcp>=1.0->dot-swarm==0.3.3)
+2026-04-20T22:22:23.6394578Z   Downloading python_dotenv-1.2.2-py3-none-any.whl.metadata (27 kB)
+2026-04-20T22:22:23.8991818Z Collecting cryptography>=3.4.0 (from pyjwt[crypto]>=2.10.1->mcp>=1.0->dot-swarm==0.3.3)
+2026-04-20T22:22:23.9110348Z   Downloading cryptography-46.0.7-cp311-abi3-win_amd64.whl.metadata (5.7 kB)
+2026-04-20T22:22:24.0377789Z Collecting cffi>=2.0.0 (from cryptography>=3.4.0->pyjwt[crypto]>=2.10.1->mcp>=1.0->dot-swarm==0.3.3)
+2026-04-20T22:22:24.0542915Z   Downloading cffi-2.0.0-cp312-cp312-win_amd64.whl.metadata (2.6 kB)
+2026-04-20T22:22:24.1090524Z Collecting pycparser (from cffi>=2.0.0->cryptography>=3.4.0->pyjwt[crypto]>=2.10.1->mcp>=1.0->dot-swarm==0.3.3)
+2026-04-20T22:22:24.1190701Z   Downloading pycparser-3.0-py3-none-any.whl.metadata (8.2 kB)
+2026-04-20T22:22:24.1624309Z Downloading pytest-9.0.3-py3-none-any.whl (375 kB)
+2026-04-20T22:22:24.2047795Z Downloading pluggy-1.6.0-py3-none-any.whl (20 kB)
+2026-04-20T22:22:24.2347281Z Downloading anyio-4.13.0-py3-none-any.whl (114 kB)
+2026-04-20T22:22:24.2609343Z Downloading boto3-1.42.92-py3-none-any.whl (140 kB)
+2026-04-20T22:22:24.3058175Z Downloading botocore-1.42.92-py3-none-any.whl (14.9 MB)
+2026-04-20T22:22:24.4351532Z    ---------------------------------------- 14.9/14.9 MB 117.2 MB/s  0:00:00
+2026-04-20T22:22:24.4437150Z Downloading jmespath-1.1.0-py3-none-any.whl (20 kB)
+2026-04-20T22:22:24.4700026Z Downloading python_dateutil-2.9.0.post0-py2.py3-none-any.whl (229 kB)
+2026-04-20T22:22:24.5010200Z Downloading s3transfer-0.16.0-py3-none-any.whl (86 kB)
+2026-04-20T22:22:24.5249098Z Downloading urllib3-2.6.3-py3-none-any.whl (131 kB)
+2026-04-20T22:22:24.5542512Z Downloading idna-3.11-py3-none-any.whl (71 kB)
+2026-04-20T22:22:24.5820260Z Downloading iniconfig-2.3.0-py3-none-any.whl (7.5 kB)
+2026-04-20T22:22:24.6078627Z Downloading mcp-1.27.0-py3-none-any.whl (215 kB)
+2026-04-20T22:22:24.6349835Z Downloading pydantic-2.13.3-py3-none-any.whl (471 kB)
+2026-04-20T22:22:24.6734072Z Downloading pydantic_core-2.46.3-cp312-cp312-win_amd64.whl (2.1 MB)
+2026-04-20T22:22:24.7432746Z    ---------------------------------------- 2.1/2.1 MB 28.7 MB/s  0:00:00
+2026-04-20T22:22:24.7516993Z Downloading annotated_types-0.7.0-py3-none-any.whl (13 kB)
+2026-04-20T22:22:24.7826873Z Downloading httpx-0.28.1-py3-none-any.whl (73 kB)
+2026-04-20T22:22:24.8120823Z Downloading httpcore-1.0.9-py3-none-any.whl (78 kB)
+2026-04-20T22:22:24.8358160Z Downloading h11-0.16.0-py3-none-any.whl (37 kB)
+2026-04-20T22:22:24.8615708Z Downloading httpx_sse-0.4.3-py3-none-any.whl (9.0 kB)
+2026-04-20T22:22:24.8853257Z Downloading jsonschema-4.26.0-py3-none-any.whl (90 kB)
+2026-04-20T22:22:24.9113475Z Downloading attrs-26.1.0-py3-none-any.whl (67 kB)
+2026-04-20T22:22:24.9376031Z Downloading jsonschema_specifications-2025.9.1-py3-none-any.whl (18 kB)
+2026-04-20T22:22:24.9653995Z Downloading pydantic_settings-2.14.0-py3-none-any.whl (60 kB)
+2026-04-20T22:22:24.9936131Z Downloading pygments-2.20.0-py3-none-any.whl (1.2 MB)
+2026-04-20T22:22:25.0269665Z    ---------------------------------------- 1.2/1.2 MB 31.3 MB/s  0:00:00
+2026-04-20T22:22:25.0357416Z Downloading pyjwt-2.12.1-py3-none-any.whl (29 kB)
+2026-04-20T22:22:25.0650094Z Downloading cryptography-46.0.7-cp311-abi3-win_amd64.whl (3.5 MB)
+2026-04-20T22:22:25.1213215Z    ---------------------------------------- 3.5/3.5 MB 68.6 MB/s  0:00:00
+2026-04-20T22:22:25.1337673Z Downloading cffi-2.0.0-cp312-cp312-win_amd64.whl (183 kB)
+2026-04-20T22:22:25.1636134Z Downloading python_dotenv-1.2.2-py3-none-any.whl (22 kB)
+2026-04-20T22:22:25.1880730Z Downloading python_multipart-0.0.26-py3-none-any.whl (28 kB)
+2026-04-20T22:22:25.2206610Z Downloading pywin32-311-cp312-cp312-win_amd64.whl (9.5 MB)
+2026-04-20T22:22:25.3830418Z    ---------------------------------------- 9.5/9.5 MB 59.2 MB/s  0:00:00
+2026-04-20T22:22:25.3913692Z Downloading referencing-0.37.0-py3-none-any.whl (26 kB)
+2026-04-20T22:22:25.4249563Z Downloading rpds_py-0.30.0-cp312-cp312-win_amd64.whl (240 kB)
+2026-04-20T22:22:25.4515513Z Downloading six-1.17.0-py2.py3-none-any.whl (11 kB)
+2026-04-20T22:22:25.4749318Z Downloading sse_starlette-3.3.4-py3-none-any.whl (14 kB)
+2026-04-20T22:22:25.5026002Z Downloading starlette-1.0.0-py3-none-any.whl (72 kB)
+2026-04-20T22:22:25.5350386Z Downloading typing_extensions-4.15.0-py3-none-any.whl (44 kB)
+2026-04-20T22:22:25.5582978Z Downloading typing_inspection-0.4.2-py3-none-any.whl (14 kB)
+2026-04-20T22:22:25.5864515Z Downloading uvicorn-0.44.0-py3-none-any.whl (69 kB)
+2026-04-20T22:22:25.6112839Z Downloading certifi-2026.2.25-py3-none-any.whl (153 kB)
+2026-04-20T22:22:25.7996279Z Downloading pycparser-3.0-py3-none-any.whl (48 kB)
+2026-04-20T22:22:25.9523548Z Building wheels for collected packages: dot-swarm
+2026-04-20T22:22:25.9556881Z   Building wheel for dot-swarm (pyproject.toml): started
+2026-04-20T22:22:26.3108541Z   Building wheel for dot-swarm (pyproject.toml): finished with status 'done'
+2026-04-20T22:22:26.3130292Z   Created wheel for dot-swarm: filename=dot_swarm-0.3.3-py3-none-any.whl size=97287 sha256=f69f1c91751ef93ae4024e7f04c4b7d3f751480f4f4c2b34e2fa2d61320ca954
+2026-04-20T22:22:26.3131997Z   Stored in directory: C:\Users\runneradmin\AppData\Local\Temp\pip-ephem-wheel-cache-vjuwkdai\wheels\43\a6\e6\533b4d90413f2d1cfd39c536aeee3c627b763f4cba27d0434d
+2026-04-20T22:22:26.3167554Z Successfully built dot-swarm
+2026-04-20T22:22:26.3982751Z Installing collected packages: pywin32, urllib3, typing_extensions, six, rpds-py, python-multipart, python-dotenv, pyjwt, pygments, pycparser, pluggy, jmespath, iniconfig, idna, httpx-sse, h11, certifi, attrs, annotated-types, uvicorn, typing-inspection, referencing, python-dateutil, pytest, pydantic-core, httpcore, cffi, anyio, starlette, pydantic, jsonschema-specifications, httpx, cryptography, botocore, sse-starlette, s3transfer, pydantic-settings, jsonschema, mcp, boto3, dot-swarm
+2026-04-20T22:22:41.8408664Z 
+2026-04-20T22:22:41.8454403Z Successfully installed annotated-types-0.7.0 anyio-4.13.0 attrs-26.1.0 boto3-1.42.92 botocore-1.42.92 certifi-2026.2.25 cffi-2.0.0 cryptography-46.0.7 dot-swarm-0.3.3 h11-0.16.0 httpcore-1.0.9 httpx-0.28.1 httpx-sse-0.4.3 idna-3.11 iniconfig-2.3.0 jmespath-1.1.0 jsonschema-4.26.0 jsonschema-specifications-2025.9.1 mcp-1.27.0 pluggy-1.6.0 pycparser-3.0 pydantic-2.13.3 pydantic-core-2.46.3 pydantic-settings-2.14.0 pygments-2.20.0 pyjwt-2.12.1 pytest-9.0.3 python-dateutil-2.9.0.post0 python-dotenv-1.2.2 python-multipart-0.0.26 pywin32-311 referencing-0.37.0 rpds-py-0.30.0 s3transfer-0.16.0 six-1.17.0 sse-starlette-3.3.4 starlette-1.0.0 typing-inspection-0.4.2 typing_extensions-4.15.0 urllib3-2.6.3 uvicorn-0.44.0
+2026-04-20T22:22:43.0439442Z ##[group]Run pip list
+2026-04-20T22:22:43.0439743Z [36;1mpip list[0m
+2026-04-20T22:22:43.0500523Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-04-20T22:22:43.0500848Z env:
+2026-04-20T22:22:43.0501120Z   pythonLocation: C:\hostedtoolcache\windows\Python\3.12.10\x64
+2026-04-20T22:22:43.0501536Z   PKG_CONFIG_PATH: C:\hostedtoolcache\windows\Python\3.12.10\x64/lib/pkgconfig
+2026-04-20T22:22:43.0501951Z   Python_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.12.10\x64
+2026-04-20T22:22:43.0502312Z   Python2_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.12.10\x64
+2026-04-20T22:22:43.0502678Z   Python3_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.12.10\x64
+2026-04-20T22:22:43.0502965Z ##[endgroup]
+2026-04-20T22:22:43.6552922Z Package                   Version
+2026-04-20T22:22:43.6555129Z ------------------------- -----------
+2026-04-20T22:22:43.6557095Z annotated-types           0.7.0
+2026-04-20T22:22:43.6558450Z anyio                     4.13.0
+2026-04-20T22:22:43.6560018Z argcomplete               3.6.3
+2026-04-20T22:22:43.6561274Z attrs                     26.1.0
+2026-04-20T22:22:43.6563160Z boto3                     1.42.92
+2026-04-20T22:22:43.6564826Z botocore                  1.42.92
+2026-04-20T22:22:43.6566404Z certifi                   2026.2.25
+2026-04-20T22:22:43.6567488Z cffi                      2.0.0
+2026-04-20T22:22:43.6568970Z click                     8.3.2
+2026-04-20T22:22:43.6570466Z colorama                  0.4.6
+2026-04-20T22:22:43.6571690Z cryptography              46.0.7
+2026-04-20T22:22:43.6572827Z dot-swarm                 0.3.3
+2026-04-20T22:22:43.6573913Z h11                       0.16.0
+2026-04-20T22:22:43.6575009Z httpcore                  1.0.9
+2026-04-20T22:22:43.6576153Z httpx                     0.28.1
+2026-04-20T22:22:43.6577316Z httpx-sse                 0.4.3
+2026-04-20T22:22:43.6578395Z idna                      3.11
+2026-04-20T22:22:43.6579502Z iniconfig                 2.3.0
+2026-04-20T22:22:43.6580579Z jmespath                  1.1.0
+2026-04-20T22:22:43.6581696Z jsonschema                4.26.0
+2026-04-20T22:22:43.6582777Z jsonschema-specifications 2025.9.1
+2026-04-20T22:22:43.6583937Z mcp                       1.27.0
+2026-04-20T22:22:43.6585038Z packaging                 26.0
+2026-04-20T22:22:43.6586064Z pip                       26.0.1
+2026-04-20T22:22:43.6587165Z pipx                      1.11.1
+2026-04-20T22:22:43.6588273Z platformdirs              4.9.6
+2026-04-20T22:22:43.6589841Z pluggy                    1.6.0
+2026-04-20T22:22:43.6591111Z pycparser                 3.0
+2026-04-20T22:22:43.6592190Z pydantic                  2.13.3
+2026-04-20T22:22:43.6593296Z pydantic_core             2.46.3
+2026-04-20T22:22:43.6594413Z pydantic-settings         2.14.0
+2026-04-20T22:22:43.6595484Z Pygments                  2.20.0
+2026-04-20T22:22:43.6596526Z PyJWT                     2.12.1
+2026-04-20T22:22:43.6597536Z pytest                    9.0.3
+2026-04-20T22:22:43.6598623Z python-dateutil           2.9.0.post0
+2026-04-20T22:22:43.6599632Z python-dotenv             1.2.2
+2026-04-20T22:22:43.6600707Z python-multipart          0.0.26
+2026-04-20T22:22:43.6601850Z pywin32                   311
+2026-04-20T22:22:43.6603053Z referencing               0.37.0
+2026-04-20T22:22:43.6604169Z rpds-py                   0.30.0
+2026-04-20T22:22:43.6605255Z s3transfer                0.16.0
+2026-04-20T22:22:43.6606249Z six                       1.17.0
+2026-04-20T22:22:43.6607277Z sse-starlette             3.3.4
+2026-04-20T22:22:43.6608264Z starlette                 1.0.0
+2026-04-20T22:22:43.6609776Z typing_extensions         4.15.0
+2026-04-20T22:22:43.6610969Z typing-inspection         0.4.2
+2026-04-20T22:22:43.6612040Z urllib3                   2.6.3
+2026-04-20T22:22:43.6613081Z userpath                  1.9.2
+2026-04-20T22:22:43.6614087Z uvicorn                   0.44.0
+2026-04-20T22:22:43.8308177Z ##[group]Run pytest --tb=short
+2026-04-20T22:22:43.8308510Z [36;1mpytest --tb=short[0m
+2026-04-20T22:22:43.8368038Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-04-20T22:22:43.8368356Z env:
+2026-04-20T22:22:43.8368593Z   pythonLocation: C:\hostedtoolcache\windows\Python\3.12.10\x64
+2026-04-20T22:22:43.8369014Z   PKG_CONFIG_PATH: C:\hostedtoolcache\windows\Python\3.12.10\x64/lib/pkgconfig
+2026-04-20T22:22:43.8369435Z   Python_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.12.10\x64
+2026-04-20T22:22:43.8369802Z   Python2_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.12.10\x64
+2026-04-20T22:22:43.8370156Z   Python3_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.12.10\x64
+2026-04-20T22:22:43.8370427Z   PYTHONPATH: src
+2026-04-20T22:22:43.8370600Z ##[endgroup]
+2026-04-20T22:22:46.1839962Z ============================= test session starts =============================
+2026-04-20T22:22:46.1840937Z platform win32 -- Python 3.12.10, pytest-9.0.3, pluggy-1.6.0
+2026-04-20T22:22:46.1842089Z rootdir: D:\a\dot_swarm\dot_swarm
+2026-04-20T22:22:46.1842454Z configfile: pyproject.toml
+2026-04-20T22:22:46.1842742Z plugins: anyio-4.13.0
+2026-04-20T22:22:46.1843023Z collected 201 items
+2026-04-20T22:22:46.1843194Z 
+2026-04-20T22:22:46.3817032Z tests\test_cli.py ......F..                                              [  4%]
+2026-04-20T22:22:46.4023367Z tests\test_concurrency.py ...                                            [  5%]
+2026-04-20T22:22:46.8022423Z tests\test_federation.py ................................                [ 21%]
+2026-04-20T22:22:46.8529002Z tests\test_hierarchy.py .....                                            [ 24%]
+2026-04-20T22:22:46.8553465Z tests\test_mcp.py sss                                                    [ 25%]
+2026-04-20T22:22:47.0417143Z tests\test_operations.py ..............                                  [ 32%]
+2026-04-20T22:22:47.1219285Z tests\test_scheduler.py ...................................              [ 50%]
+2026-04-20T22:22:47.1720961Z tests\test_security.py ...................                               [ 59%]
+2026-04-20T22:22:47.2443518Z tests\test_signing.py ....................                               [ 69%]
+2026-04-20T22:22:47.5484599Z tests\test_swarms_provider.py .................................          [ 86%]
+2026-04-20T22:22:48.8138039Z tests\test_workflows.py ............................                     [100%]
+2026-04-20T22:22:48.8138579Z 
+2026-04-20T22:22:48.8138769Z ================================== FAILURES ===================================
+2026-04-20T22:22:48.8139365Z _____________________________ test_report_to_file _____________________________
+2026-04-20T22:22:48.8139887Z tests\test_cli.py:137: in test_report_to_file
+2026-04-20T22:22:48.8140275Z     assert result.exit_code == 0
+2026-04-20T22:22:48.8140611Z E   AssertionError: assert 1 == 0
+2026-04-20T22:22:48.8142207Z E    +  where 1 = <Result UnicodeEncodeError('charmap', '# dot_swarm Colony Report\r\n\r\n**Generated**: 2026-04-20 22:22 UTC  \r\n**Roo...\r\n\r\n_Generated by [dot_swarm](https://github.com/MikeHLee/dot_swarm)_', 211, 212, 'character maps to <undefined>')>.exit_code
+2026-04-20T22:22:48.8144212Z ============================== warnings summary ===============================
+2026-04-20T22:22:48.8144672Z tests/test_cli.py: 13 warnings
+2026-04-20T22:22:48.8145016Z tests/test_concurrency.py: 6 warnings
+2026-04-20T22:22:48.8145350Z tests/test_hierarchy.py: 4 warnings
+2026-04-20T22:22:48.8145704Z tests/test_operations.py: 23 warnings
+2026-04-20T22:22:48.8146080Z tests/test_swarms_provider.py: 7 warnings
+2026-04-20T22:22:48.8147664Z   D:\a\dot_swarm\dot_swarm\src\dot_swarm\models.py:278: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+2026-04-20T22:22:48.8149322Z     return datetime.utcnow().strftime("%Y-%m-%dT%H:%MZ")
+2026-04-20T22:22:48.8151883Z 
+2026-04-20T22:22:48.8152101Z tests/test_cli.py::test_claim_and_done
+2026-04-20T22:22:48.8152536Z tests/test_concurrency.py::test_claim_creates_file
+2026-04-20T22:22:48.8152986Z tests/test_concurrency.py::test_done_clears_claims
+2026-04-20T22:22:48.8153434Z tests/test_operations.py::test_ids_never_reused
+2026-04-20T22:22:48.8153873Z tests/test_operations.py::test_claim_moves_to_active
+2026-04-20T22:22:48.8154330Z tests/test_operations.py::test_done_moves_to_done
+2026-04-20T22:22:48.8154816Z tests/test_operations.py::test_partial_keeps_in_active
+2026-04-20T22:22:48.8155273Z tests/test_operations.py::test_block_marks_item
+2026-04-20T22:22:48.8155730Z tests/test_operations.py::test_audit_flags_stale_items
+2026-04-20T22:22:48.8157307Z   D:\a\dot_swarm\dot_swarm\src\dot_swarm\operations.py:266: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+2026-04-20T22:22:48.8159098Z     target.claimed_at = datetime.utcnow()
+2026-04-20T22:22:48.8159347Z 
+2026-04-20T22:22:48.8159475Z tests/test_cli.py::test_claim_and_done
+2026-04-20T22:22:48.8159861Z tests/test_concurrency.py::test_done_clears_claims
+2026-04-20T22:22:48.8160296Z tests/test_operations.py::test_ids_never_reused
+2026-04-20T22:22:48.8160709Z tests/test_operations.py::test_done_moves_to_done
+2026-04-20T22:22:48.8162199Z   D:\a\dot_swarm\dot_swarm\src\dot_swarm\operations.py:294: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+2026-04-20T22:22:48.8164001Z     target.done_at = datetime.utcnow()
+2026-04-20T22:22:48.8164221Z 
+2026-04-20T22:22:48.8164357Z tests/test_cli.py::test_handoff_produces_output
+2026-04-20T22:22:48.8165804Z   D:\a\dot_swarm\dot_swarm\src\dot_swarm\cli.py:562: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+2026-04-20T22:22:48.8167298Z     now = datetime.utcnow().strftime("%Y-%m-%dT%H:%MZ")
+2026-04-20T22:22:48.8167600Z 
+2026-04-20T22:22:48.8167777Z tests/test_operations.py::test_partial_keeps_in_active
+2026-04-20T22:22:48.8169315Z   D:\a\dot_swarm\dot_swarm\src\dot_swarm\operations.py:317: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+2026-04-20T22:22:48.8170810Z     target.claimed_at = datetime.utcnow()
+2026-04-20T22:22:48.8171063Z 
+2026-04-20T22:22:48.8171203Z tests/test_operations.py::test_append_memory
+2026-04-20T22:22:48.8171626Z tests/test_operations.py::test_memory_is_append_only
+2026-04-20T22:22:48.8172058Z tests/test_operations.py::test_memory_is_append_only
+2026-04-20T22:22:48.8173575Z   D:\a\dot_swarm\dot_swarm\src\dot_swarm\operations.py:635: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+2026-04-20T22:22:48.8175090Z     date = datetime.utcnow().strftime("%Y-%m-%d")
+2026-04-20T22:22:48.8175365Z 
+2026-04-20T22:22:48.8175539Z tests/test_operations.py::test_audit_flags_stale_items
+2026-04-20T22:22:48.8177029Z   D:\a\dot_swarm\dot_swarm\src\dot_swarm\operations.py:658: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+2026-04-20T22:22:48.8178478Z     now = datetime.utcnow()
+2026-04-20T22:22:48.8178666Z 
+2026-04-20T22:22:48.8178939Z -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+2026-04-20T22:22:48.8180329Z =========================== short test summary info ===========================
+2026-04-20T22:22:48.8180973Z FAILED tests/test_cli.py::test_report_to_file - AssertionError: assert 1 == 0
+2026-04-20T22:22:48.8182460Z  +  where 1 = <Result UnicodeEncodeError('charmap', '# dot_swarm Colony Report\r\n\r\n**Generated**: 2026-04-20 22:22 UTC  \r\n**Roo...\r\n\r\n_Generated by [dot_swarm](https://github.com/MikeHLee/dot_swarm)_', 211, 212, 'character maps to <undefined>')>.exit_code
+2026-04-20T22:22:48.8184188Z ============ 1 failed, 197 passed, 3 skipped, 72 warnings in 3.62s ============
+2026-04-20T22:22:49.0253207Z ##[error]Process completed with exit code 1.
+2026-04-20T22:22:49.0407217Z ##[group]Run echo "Listing .swarm directory if it exists"
+2026-04-20T22:22:49.0407676Z [36;1mecho "Listing .swarm directory if it exists"[0m
+2026-04-20T22:22:49.0407992Z [36;1mls -R .swarm || echo ".swarm not found"[0m
+2026-04-20T22:22:49.0408459Z [36;1mecho "Last 50 lines of pytest output would be useful here, but pytest is run in the previous step."[0m
+2026-04-20T22:22:49.0469544Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-04-20T22:22:49.0469861Z env:
+2026-04-20T22:22:49.0470099Z   pythonLocation: C:\hostedtoolcache\windows\Python\3.12.10\x64
+2026-04-20T22:22:49.0470501Z   PKG_CONFIG_PATH: C:\hostedtoolcache\windows\Python\3.12.10\x64/lib/pkgconfig
+2026-04-20T22:22:49.0470902Z   Python_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.12.10\x64
+2026-04-20T22:22:49.0471252Z   Python2_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.12.10\x64
+2026-04-20T22:22:49.0471616Z   Python3_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.12.10\x64
+2026-04-20T22:22:49.0471953Z ##[endgroup]
+2026-04-20T22:22:49.4752595Z Listing .swarm directory if it exists
+2026-04-20T22:22:49.5524607Z 
+2026-04-20T22:22:49.5531974Z     Directory: D:\a\dot_swarm\dot_swarm\.swarm
+2026-04-20T22:22:49.5532330Z 
+2026-04-20T22:22:49.5534379Z [32;1mMode   [0m[32;1m              LastWriteTime[0m[32;1m         Length[0m[32;1m Name[0m
+2026-04-20T22:22:49.5535339Z [32;1m----   [0m [32;1m             -------------[0m [32;1m        ------[0m [32;1m----[0m
+2026-04-20T22:22:49.5535765Z -a---           4/20/2026 10:22 PM            223 BOOTSTRAP.md
+2026-04-20T22:22:49.5539915Z -a---           4/20/2026 10:22 PM           2392 context.md
+2026-04-20T22:22:49.5543098Z -a---           4/20/2026 10:22 PM           5498 memory.md
+2026-04-20T22:22:49.5545895Z -a---           4/20/2026 10:22 PM          26424 queue.md
+2026-04-20T22:22:49.5548421Z -a---           4/20/2026 10:22 PM            756 state.md
+2026-04-20T22:22:49.5554246Z Last 50 lines of pytest output would be useful here, but pytest is run in the previous step.
+2026-04-20T22:22:49.5577858Z 
+2026-04-20T22:22:49.6283184Z Post job cleanup.
+2026-04-20T22:22:49.8385187Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-04-20T22:22:49.8695929Z git version 2.53.0.windows.2
+2026-04-20T22:22:49.8776089Z Temporarily overriding HOME='D:\a\_temp\348dc8db-a4fe-4961-af5a-634f3ab554da' before making global git config changes
+2026-04-20T22:22:49.8777210Z Adding repository directory to the temporary git global config as a safe directory
+2026-04-20T22:22:49.8789014Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\dot_swarm\dot_swarm
+2026-04-20T22:22:49.9131694Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-04-20T22:22:49.9517837Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-04-20T22:22:50.5429709Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-04-20T22:22:50.5695692Z http.https://github.com/.extraheader
+2026-04-20T22:22:50.5741033Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all http.https://github.com/.extraheader
+2026-04-20T22:22:50.6044392Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-04-20T22:22:51.1543975Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-04-20T22:22:51.1858045Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-04-20T22:22:51.7617663Z Cleaning up orphan processes
+2026-04-20T22:22:51.7677680Z ##[warning]Node.js 20 actions are deprecated. The following actions are running on Node.js 20 and may not work as expected: actions/checkout@v4, actions/setup-python@v5. Actions will be forced to run with Node.js 24 by default starting June 2nd, 2026. Node.js 20 will be removed from the runner on September 16th, 2026. Please check if updated versions of these actions are available that support Node.js 24. To opt into Node.js 24 now, set the FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true environment variable on the runner or in your workflow file. Once Node.js 24 becomes the default, you can temporarily opt out by setting ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
