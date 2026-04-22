@@ -171,8 +171,8 @@ oasis-x/
 │       └── cross-division.md# Cross-division coordination
 ├── swarm-city/              # This project (CLI + MCP source)
 │   ├── README.md            # This file (the bible)
-│   ├── cli/                 # SwarmCity CLI tool
-│   ├── mcp/                 # SwarmCity MCP server
+│   ├── cli/                 # dot_swarm CLI tool
+│   ├── mcp/                 # dot_swarm MCP server
 │   └── docs/                # Additional documentation
 └── AGENTS.md                # Updated to point at .swarm/BOOTSTRAP.md
 ```
@@ -436,7 +436,7 @@ At div level: current state.md + next 3 OPEN items from queue.md.
 Output example:
 ```
 Organization: oasis-x | Updated: 2026-03-26T00:00Z by human-ML
-Focus: SwarmCity bootstrap — scaffolding .swarm/ structure
+Focus: dot_swarm bootstrap — scaffolding .swarm/ structure
 
 Division     Last Touched              Focus
 ──────────── ──────────────────────── ────────────────────────────────
@@ -508,16 +508,16 @@ swarm handoff [--format md|text]
 Generates a handoff document suitable for pasting into a new agent chat:
 
 ```markdown
-# SwarmCity Handoff — oasis-x — 2026-03-26T14:30Z
+# dot_swarm Handoff — oasis-x — 2026-03-26T14:30Z
 
 ## Current State
-Focus: SwarmCity Phase 0 scaffolding
+Focus: dot_swarm Phase 0 scaffolding
 Agent: human-ML
 Active: ORG-001 (in progress — .swarm/ files being created)
 
 ## Ready for Pickup
-- ORG-002: Implement SwarmCity CLI tool [HIGH]
-- ORG-003: Implement SwarmCity MCP server [HIGH]
+- ORG-002: Implement dot_swarm CLI tool [HIGH]
+- ORG-003: Implement dot_swarm MCP server [HIGH]
 - ORG-004: Create division-level .swarm/ stubs [HIGH]
 
 ## Context Files to Load
@@ -551,9 +551,9 @@ Detects division paths from `context.md`'s Active Divisions table.
 
 ### Overview
 
-The SwarmCity MCP server exposes all `.swarm/` operations as tools that any MCP-
+The dot_swarm MCP server exposes all `.swarm/` operations as tools that any MCP-
 compatible agent platform can call. This is the preferred way for agents to interact
-with SwarmCity when an MCP connection is available — it handles atomic writes and
+with dot_swarm when an MCP connection is available — it handles atomic writes and
 provides structured responses.
 
 **Language**: Python 3.11+
@@ -624,7 +624,7 @@ Returns list of work items as structured dicts:
 [{
   "id": "ORG-002",
   "state": "OPEN",
-  "description": "Implement SwarmCity CLI tool",
+  "description": "Implement dot_swarm CLI tool",
   "priority": "high",
   "project": "swarm-city-tooling",
   "claimed_by": null,
@@ -736,7 +736,7 @@ cat > .gitignore << 'EOF'
 !AGENTS.md
 EOF
 git add .swarm/ swarm-city/ .gitignore AGENTS.md
-git commit -m "chore: initialize SwarmCity coordination layer"
+git commit -m "chore: initialize dot_swarm coordination layer"
 ```
 
 This gives:
@@ -776,7 +776,7 @@ Or per-division at `<repo>/.github/workflows/swarm-drift-check.yml`.
 ### Workflow Spec
 
 ```yaml
-name: SwarmCity Drift Check
+name: dot_swarm Drift Check
 
 on:
   pull_request:
@@ -829,9 +829,9 @@ jobs:
           queue = open('/tmp/queue.md').read()[:2000]
           changed = open('/tmp/changed_files.txt').read()
 
-          prompt = f"""You are reviewing a pull request for documentation drift in a SwarmCity-coordinated repository.
+          prompt = f"""You are reviewing a pull request for documentation drift in a dot_swarm-coordinated repository.
 
-          SwarmCity uses .swarm/state.md and .swarm/queue.md to track agent coordination state.
+          dot_swarm uses .swarm/state.md and .swarm/queue.md to track agent coordination state.
 
           Changed files in this PR:
           {changed}
@@ -866,7 +866,7 @@ jobs:
           assessment = result['content'][0]['text']
 
           with open('/tmp/drift_assessment.md', 'w') as f:
-              f.write(f"## SwarmCity Drift Check\n\n{assessment}")
+              f.write(f"## dot_swarm Drift Check\n\n{assessment}")
           PYEOF
 
       - name: Post PR comment
@@ -897,7 +897,7 @@ The `swarm init` command will eventually create this file automatically.
 **Goal**: Org-level `.swarm/` structure exists and is usable by agents today.
 **Status**: In progress
 
-- [x] Design SwarmCity architecture
+- [x] Design dot_swarm architecture
 - [x] Create org-level `.swarm/BOOTSTRAP.md`
 - [x] Create org-level `.swarm/ROUTING.md`
 - [x] Create org-level `.swarm/GLOSSARY.md`
@@ -983,9 +983,9 @@ The `swarm init` command will eventually create this file automatically.
 
 ## 12. Session Handoff Guide
 
-This section is specifically for picking up SwarmCity work across sessions.
+This section is specifically for picking up dot_swarm work across sessions.
 
-### Starting a New Session on SwarmCity
+### Starting a New Session on dot_swarm
 
 1. Read this file (README.md) from top to bottom — or at minimum sections 3, 4, 11.
 2. Read `oasis-x/.swarm/state.md` for current focus.

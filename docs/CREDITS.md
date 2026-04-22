@@ -61,7 +61,7 @@ The single prerequisite for all of this: **all members speak the same chemical
 language.** Pheromone signals only work if every worker interprets them the same way.
 The protocol is the coordination.
 
-SwarmCity is a direct translation of this principle to software agent fleets. Models
+dot_swarm is a direct translation of this principle to software agent fleets. Models
 and tools that modify filesystem-native projects are better off leaving traces in their
 environment — readable by any subsequent agent — than reporting state to a central node
 around which complicated systems must be arranged to prevent bottlenecks and data loss
@@ -116,7 +116,7 @@ to those modifications.
 
 The definitive reference for swarm intelligence. Covers self-organisation,
 stigmergy, emergent problem solving, and their engineering applications.
-SwarmCity's multi-division "colony" model maps directly to the
+dot_swarm's multi-division "colony" model maps directly to the
 decentralised swarms described here.
 
 ---
@@ -129,7 +129,7 @@ decentralised swarms described here.
 > 26(1), 29–41.
 
 The paper that showed ant pheromone trails could solve NP-hard routing
-problems. Directly inspired SwarmCity's priority-weighted queue: items
+problems. Directly inspired dot_swarm's priority-weighted queue: items
 claimed often accumulate implicit "pheromone weight" through repeated
 attention.
 
@@ -143,7 +143,7 @@ attention.
 One of the first papers to formally bridge stigmergy and software
 engineering, arguing that ants demonstrate scalable, fault-tolerant
 coordination principles directly applicable to distributed software
-systems. SwarmCity's `.swarm/` shared-file model is a filesystem
+systems. dot_swarm's `.swarm/` shared-file model is a filesystem
 implementation of precisely this principle.
 
 ---
@@ -153,7 +153,7 @@ implementation of precisely this principle.
 The [Nature collection on Collective Behaviour in Animals](https://www.nature.com/collections/cgbgjbahac)
 gathers modern research on how signal trails, pheromone gradients, and
 local interaction rules produce colony-level intelligence — the same
-phenomena SwarmCity adapts for software agent fleets.
+phenomena dot_swarm adapts for software agent fleets.
 
 ---
 
@@ -213,7 +213,7 @@ the signed pheromone trail all address variants of this same root problem.
 
 ## Design Lineage
 
-| Biological concept | SwarmCity implementation |
+| Biological concept | dot_swarm implementation |
 |---|---|
 | Termite pheromone deposit | `state.md` **Current focus** / **Blockers** |
 | Ant trail reinforcement | Item priority + reclaim count |
@@ -224,5 +224,5 @@ the signed pheromone trail all address variants of this same root problem.
 
 ---
 
-*If you have built something with SwarmCity, we'd love to hear about it.
-Open an issue or start a discussion on [GitHub](https://github.com/MikeHLee/SwarmCity).*
+*If you have built something with dot_swarm, we'd love to hear about it.
+Open an issue or start a discussion on [GitHub](https://github.com/MikeHLee/dot_swarm).*
