@@ -174,8 +174,8 @@ files). This means:</p>
 │       └── cross-division.md# Cross-division coordination
 ├── swarm-city/              # This project (CLI + MCP source)
 │   ├── README.md            # This file (the bible)
-│   ├── cli/                 # SwarmCity CLI tool
-│   ├── mcp/                 # SwarmCity MCP server
+│   ├── cli/                 # dot_swarm CLI tool
+│   ├── mcp/                 # dot_swarm MCP server
 │   └── docs/                # Additional documentation
 └── AGENTS.md                # Updated to point at .swarm/BOOTSTRAP.md
 </code></pre></div></div>
@@ -436,7 +436,7 @@ At div level: current state.md + next 3 OPEN items from queue.md.
 
 <p>Output example:</p>
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Organization: oasis-x | Updated: 2026-03-26T00:00Z by human-ML
-Focus: SwarmCity bootstrap — scaffolding .swarm/ structure
+Focus: dot_swarm bootstrap — scaffolding .swarm/ structure
 
 Division     Last Touched              Focus
 ──────────── ──────────────────────── ────────────────────────────────
@@ -512,16 +512,16 @@ Pending (org): ORG-002 (CLI tool), ORG-003 (MCP server), ORG-004 (div stubs)
 
 <p>Generates a handoff document suitable for pasting into a new agent chat:</p>
 
-<div class="language-markdown highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="gh"># SwarmCity Handoff — oasis-x — 2026-03-26T14:30Z</span>
+<div class="language-markdown highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="gh"># dot_swarm Handoff — oasis-x — 2026-03-26T14:30Z</span>
 
 <span class="gu">## Current State</span>
-Focus: SwarmCity Phase 0 scaffolding
+Focus: dot_swarm Phase 0 scaffolding
 Agent: human-ML
 Active: ORG-001 (in progress — .swarm/ files being created)
 
 <span class="gu">## Ready for Pickup</span>
-<span class="p">-</span> ORG-002: Implement SwarmCity CLI tool [HIGH]
-<span class="p">-</span> ORG-003: Implement SwarmCity MCP server [HIGH]
+<span class="p">-</span> ORG-002: Implement dot_swarm CLI tool [HIGH]
+<span class="p">-</span> ORG-003: Implement dot_swarm MCP server [HIGH]
 <span class="p">-</span> ORG-004: Create division-level .swarm/ stubs [HIGH]
 
 <span class="gu">## Context Files to Load</span>
@@ -556,9 +556,9 @@ table in org <code class="language-plaintext highlighter-rouge">state.md</code>.
 
 <h3 id="overview-1">Overview</h3>
 
-<p>The SwarmCity MCP server exposes all <code class="language-plaintext highlighter-rouge">.swarm/</code> operations as tools that any MCP-
+<p>The dot_swarm MCP server exposes all <code class="language-plaintext highlighter-rouge">.swarm/</code> operations as tools that any MCP-
 compatible agent platform can call. This is the preferred way for agents to interact
-with SwarmCity when an MCP connection is available — it handles atomic writes and
+with dot_swarm when an MCP connection is available — it handles atomic writes and
 provides structured responses.</p>
 
 <p><strong>Language</strong>: Python 3.11+
@@ -625,7 +625,7 @@ updates specified fields in state.md, returns updated contents.</li>
 <div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">[{</span><span class="w">
   </span><span class="nl">"id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"ORG-002"</span><span class="p">,</span><span class="w">
   </span><span class="nl">"state"</span><span class="p">:</span><span class="w"> </span><span class="s2">"OPEN"</span><span class="p">,</span><span class="w">
-  </span><span class="nl">"description"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Implement SwarmCity CLI tool"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"description"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Implement dot_swarm CLI tool"</span><span class="p">,</span><span class="w">
   </span><span class="nl">"priority"</span><span class="p">:</span><span class="w"> </span><span class="s2">"high"</span><span class="p">,</span><span class="w">
   </span><span class="nl">"project"</span><span class="p">:</span><span class="w"> </span><span class="s2">"swarm-city-tooling"</span><span class="p">,</span><span class="w">
   </span><span class="nl">"claimed_by"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
@@ -731,7 +731,7 @@ git init
 !AGENTS.md
 </span><span class="no">EOF
 </span>git add .swarm/ swarm-city/ .gitignore AGENTS.md
-git commit <span class="nt">-m</span> <span class="s2">"chore: initialize SwarmCity coordination layer"</span>
+git commit <span class="nt">-m</span> <span class="s2">"chore: initialize dot_swarm coordination layer"</span>
 </code></pre></div></div>
 
 <p>This gives:</p>
@@ -772,7 +772,7 @@ PR comment.</p>
 
 <h3 id="workflow-spec">Workflow Spec</h3>
 
-<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">name</span><span class="pi">:</span> <span class="s">SwarmCity Drift Check</span>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">name</span><span class="pi">:</span> <span class="s">dot_swarm Drift Check</span>
 
 <span class="na">on</span><span class="pi">:</span>
   <span class="na">pull_request</span><span class="pi">:</span>
@@ -825,9 +825,9 @@ PR comment.</p>
           <span class="s">queue = open('/tmp/queue.md').read()[:2000]</span>
           <span class="s">changed = open('/tmp/changed_files.txt').read()</span>
 
-          <span class="s">prompt = f"""You are reviewing a pull request for documentation drift in a SwarmCity-coordinated repository.</span>
+          <span class="s">prompt = f"""You are reviewing a pull request for documentation drift in a dot_swarm-coordinated repository.</span>
 
-          <span class="s">SwarmCity uses .swarm/state.md and .swarm/queue.md to track agent coordination state.</span>
+          <span class="s">dot_swarm uses .swarm/state.md and .swarm/queue.md to track agent coordination state.</span>
 
           <span class="s">Changed files in this PR:</span>
           <span class="s">{changed}</span>
@@ -862,7 +862,7 @@ PR comment.</p>
           <span class="s">assessment = result['content'][0]['text']</span>
 
           <span class="s">with open('/tmp/drift_assessment.md', 'w') as f:</span>
-              <span class="s">f.write(f"## SwarmCity Drift Check\n\n{assessment}")</span>
+              <span class="s">f.write(f"## dot_swarm Drift Check\n\n{assessment}")</span>
           <span class="s">PYEOF</span>
 
       <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">Post PR comment</span>
@@ -894,7 +894,7 @@ The <code class="language-plaintext highlighter-rouge">swarm init</code> command
 <strong>Status</strong>: In progress</p>
 
 <ul class="task-list">
-  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Design SwarmCity architecture</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Design dot_swarm architecture</li>
   <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Create org-level <code class="language-plaintext highlighter-rouge">.swarm/BOOTSTRAP.md</code></li>
   <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Create org-level <code class="language-plaintext highlighter-rouge">.swarm/ROUTING.md</code></li>
   <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Create org-level <code class="language-plaintext highlighter-rouge">.swarm/GLOSSARY.md</code></li>
@@ -991,9 +991,9 @@ The <code class="language-plaintext highlighter-rouge">swarm init</code> command
 
 <h2 id="12-session-handoff-guide">12. Session Handoff Guide</h2>
 
-<p>This section is specifically for picking up SwarmCity work across sessions.</p>
+<p>This section is specifically for picking up dot_swarm work across sessions.</p>
 
-<h3 id="starting-a-new-session-on-swarmcity">Starting a New Session on SwarmCity</h3>
+<h3 id="starting-a-new-session-on-dot_swarm">Starting a New Session on dot_swarm</h3>
 
 <ol>
   <li>Read this file (README.md) from top to bottom — or at minimum sections 3, 4, 11.</li>
