@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="logo_white.gif" alt="dot_swarm" width="420" style="background:#111;border-radius:8px;padding:16px;" />
+  <img src="logo.gif" alt="dot_swarm" width="420" />
   <h1>The .Swarm Protocol</h1>
   <p><strong>An ecologically-inspired, environment-first coordination protocol for multi-agent AI teams.</strong></p>
   <p>No central node. No database. No credentials. Agents leave structured traces; the environment does the coordination.</p>
@@ -10,69 +10,6 @@
     <a href="https://github.com/oasis-main/dot_swarm">GitHub</a>
   </p>
 </div>
-
-<hr />
-
-<h2 id="whats-in-the-box">What’s in the Box</h2>
-
-<p>dot_swarm is a layered toolkit. Every layer is opt-in — start with zero dependencies and add AI, security, roles, and federation only when you need them.</p>
-
-<table>
-  <thead>
-    <tr>
-      <th>Layer</th>
-      <th>Commands</th>
-      <th>Install</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td><strong>Core protocol</strong></td>
-      <td><code class="language-plaintext highlighter-rouge">init</code> <code class="language-plaintext highlighter-rouge">status</code> <code class="language-plaintext highlighter-rouge">add</code> <code class="language-plaintext highlighter-rouge">claim</code> <code class="language-plaintext highlighter-rouge">done</code> <code class="language-plaintext highlighter-rouge">partial</code> <code class="language-plaintext highlighter-rouge">block</code> <code class="language-plaintext highlighter-rouge">ready</code> <code class="language-plaintext highlighter-rouge">handoff</code></td>
-      <td><code class="language-plaintext highlighter-rouge">pip install dot-swarm</code></td>
-    </tr>
-    <tr>
-      <td><strong>Situational awareness</strong></td>
-      <td><code class="language-plaintext highlighter-rouge">ls</code> <code class="language-plaintext highlighter-rouge">explore</code> <code class="language-plaintext highlighter-rouge">report</code> <code class="language-plaintext highlighter-rouge">audit</code> <code class="language-plaintext highlighter-rouge">heal</code> <code class="language-plaintext highlighter-rouge">crawl</code></td>
-      <td>base</td>
-    </tr>
-    <tr>
-      <td><strong>Agent spawning</strong></td>
-      <td><code class="language-plaintext highlighter-rouge">spawn</code> — launch workers and roles in named tmux windows</td>
-      <td>base</td>
-    </tr>
-    <tr>
-      <td><strong>Scheduling &amp; workflows</strong></td>
-      <td><code class="language-plaintext highlighter-rouge">schedule</code> <code class="language-plaintext highlighter-rouge">workflow</code></td>
-      <td>base</td>
-    </tr>
-    <tr>
-      <td><strong>Cross-repo federation</strong></td>
-      <td><code class="language-plaintext highlighter-rouge">federation</code></td>
-      <td>base</td>
-    </tr>
-    <tr>
-      <td><strong>Cryptographic signing</strong></td>
-      <td>auto — every <code class="language-plaintext highlighter-rouge">init</code> generates an HMAC-SHA256 identity</td>
-      <td>base</td>
-    </tr>
-    <tr>
-      <td><strong>AI operations</strong></td>
-      <td><code class="language-plaintext highlighter-rouge">ai</code> <code class="language-plaintext highlighter-rouge">session</code> <code class="language-plaintext highlighter-rouge">configure</code></td>
-      <td><code class="language-plaintext highlighter-rouge">pip install 'dot-swarm[ai]'</code></td>
-    </tr>
-    <tr>
-      <td><strong>Agent roles</strong></td>
-      <td><code class="language-plaintext highlighter-rouge">role</code> <code class="language-plaintext highlighter-rouge">inspect</code> — proof-of-work gate, inspector/supervisor roles</td>
-      <td>base</td>
-    </tr>
-    <tr>
-      <td><strong>MCP server</strong></td>
-      <td><code class="language-plaintext highlighter-rouge">dot-swarm-mcp</code> — Claude Code / Cursor / Windsurf native</td>
-      <td>base</td>
-    </tr>
-  </tbody>
-</table>
 
 <hr />
 
@@ -94,6 +31,7 @@ Windsurf, Gemini, opencode — across different repos and sessions. Without coor
   <li><strong>Jira / Linear / GitHub Issues</strong> — web UIs, API credentials, no agent-native format</li>
   <li><strong>Database-backed tools</strong> — binary files, server processes, another thing to run</li>
   <li><strong>Slack bots / webhooks</strong> — async, lossy, not git-auditable</li>
+  <li><strong>Central orchestrators</strong> — the coordinator itself becomes the bottleneck; every assignment, conflict, and status check flows through one node that must be available, consistent, and fast enough for the whole fleet</li>
 </ul>
 
 <p>The answer isn’t a better tracker. It’s a different model entirely.</p>
@@ -253,7 +191,7 @@ swarm ready <span class="nt">--json</span>   <span class="c"># machine-readable,
 <p>Work items use level-prefixed IDs: <code class="language-plaintext highlighter-rouge">ORG-001</code>, <code class="language-plaintext highlighter-rouge">API-042</code>, <code class="language-plaintext highlighter-rouge">MOB-017</code>. Cross-division items
 live at org level with <code class="language-plaintext highlighter-rouge">refs:</code> pointers in each affected division’s queue.</p>
 
-<p>Use <code class="language-plaintext highlighter-rouge">swarm ascend</code> and <code class="language-plaintext highlighter-rouge">swarm descend</code> to check alignment across levels.</p>
+<p><strong>Navigating the hierarchy.</strong> <code class="language-plaintext highlighter-rouge">swarm ascend</code> checks whether the current division’s work aligns with org-level priorities — are we working on the right things? <code class="language-plaintext highlighter-rouge">swarm descend</code> checks whether org-level initiatives have corresponding tasks in each division — are we missing work anywhere?</p>
 
 <hr />
 
@@ -306,6 +244,10 @@ swarm ai <span class="s2">"implement the auth module, then the markets module"</
 
 <h4 id="multi-agent-mode-with-spawning-and-roles">Multi-agent mode with spawning and roles</h4>
 
+<p>When multiple agents work in parallel, you need more than a queue — you need <strong>structured handoffs with proof-of-work gates</strong>. A worker shouldn’t mark a task done until an independent inspector verifies the output. This prevents agents from claiming completion on half-finished or broken work.</p>
+
+<p><code class="language-plaintext highlighter-rouge">swarm spawn</code> launches agents in isolated tmux windows, each reading the same <code class="language-plaintext highlighter-rouge">.swarm/</code> state. The inspector role gates completion: workers call <code class="language-plaintext highlighter-rouge">swarm partial</code> with proof (branch, commit, tests), and only an inspector’s <code class="language-plaintext highlighter-rouge">swarm inspect --pass</code> unlocks <code class="language-plaintext highlighter-rouge">done</code>.</p>
+
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Enable inspector role — workers must prove completion before done</span>
 swarm role <span class="nb">enable </span>inspector <span class="nt">--max-iterations</span> 3 <span class="nt">--require-proof</span> <span class="s2">"branch,commit,tests"</span>
 
@@ -329,11 +271,84 @@ swarm audit <span class="nt">--full</span>
 
 <h4 id="directory-cataloging">Directory cataloging</h4>
 
+<p><code class="language-plaintext highlighter-rouge">swarm crawl</code> walks your working tree and builds a structural map in <code class="language-plaintext highlighter-rouge">context.md</code>. This gives incoming agents immediate orientation — what directories exist, what they contain, how the project is organized. Use <code class="language-plaintext highlighter-rouge">--create-items</code> to auto-generate queue entries for directories that need attention.</p>
+
+<p><strong>Detecting staleness.</strong> The <code class="language-plaintext highlighter-rouge">.swarm/</code> state can drift from the underlying codebase. Files referenced in <code class="language-plaintext highlighter-rouge">context.md</code> may be deleted; directories may be renamed; work items may reference code that no longer exists. <code class="language-plaintext highlighter-rouge">swarm heal</code> compares the current filesystem against recorded state and flags inconsistencies. <code class="language-plaintext highlighter-rouge">swarm audit</code> goes further — it checks claim age against a staleness threshold (default 24h), flags items whose dependencies have changed, and identifies orphaned entries that no longer map to anything in the code.</p>
+
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Walk the working tree and build context for all divisions</span>
 swarm crawl                   <span class="c"># writes Directory Map to context.md</span>
 swarm crawl <span class="nt">--create-items</span>    <span class="c"># also creates queue items for uncatalogued dirs</span>
+
+<span class="c"># Detect drift between .swarm/ state and actual codebase</span>
 swarm heal                    <span class="c"># verify alignment after crawl</span>
+
+<span class="c"># Audit for stale claims, broken dependencies, orphaned items</span>
+swarm audit                   <span class="c"># quick check</span>
+swarm audit <span class="nt">--full</span>            <span class="c"># deep scan including staleness window</span>
 </code></pre></div></div>
+
+<hr />
+
+<h2 id="command-reference">Command Reference</h2>
+
+<p>dot_swarm is a layered toolkit. Every layer is opt-in — start with zero dependencies and add AI, security, roles, and federation only when you need them.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Layer</th>
+      <th>Commands</th>
+      <th>Install</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Core protocol</strong></td>
+      <td><code class="language-plaintext highlighter-rouge">init</code> <code class="language-plaintext highlighter-rouge">status</code> <code class="language-plaintext highlighter-rouge">add</code> <code class="language-plaintext highlighter-rouge">claim</code> <code class="language-plaintext highlighter-rouge">done</code> <code class="language-plaintext highlighter-rouge">partial</code> <code class="language-plaintext highlighter-rouge">block</code> <code class="language-plaintext highlighter-rouge">ready</code> <code class="language-plaintext highlighter-rouge">handoff</code></td>
+      <td><code class="language-plaintext highlighter-rouge">pip install dot-swarm</code></td>
+    </tr>
+    <tr>
+      <td><strong>Situational awareness</strong></td>
+      <td><code class="language-plaintext highlighter-rouge">ls</code> <code class="language-plaintext highlighter-rouge">explore</code> <code class="language-plaintext highlighter-rouge">report</code> <code class="language-plaintext highlighter-rouge">audit</code> <code class="language-plaintext highlighter-rouge">heal</code> <code class="language-plaintext highlighter-rouge">crawl</code></td>
+      <td>base</td>
+    </tr>
+    <tr>
+      <td><strong>Agent spawning</strong></td>
+      <td><code class="language-plaintext highlighter-rouge">spawn</code> — launch workers and roles in named tmux windows</td>
+      <td>base</td>
+    </tr>
+    <tr>
+      <td><strong>Scheduling &amp; workflows</strong></td>
+      <td><code class="language-plaintext highlighter-rouge">schedule</code> <code class="language-plaintext highlighter-rouge">workflow</code></td>
+      <td>base</td>
+    </tr>
+    <tr>
+      <td><strong>Cross-repo federation</strong></td>
+      <td><code class="language-plaintext highlighter-rouge">federation</code></td>
+      <td>base</td>
+    </tr>
+    <tr>
+      <td><strong>Cryptographic signing</strong></td>
+      <td>auto — every <code class="language-plaintext highlighter-rouge">init</code> generates an HMAC-SHA256 identity</td>
+      <td>base</td>
+    </tr>
+    <tr>
+      <td><strong>AI operations</strong></td>
+      <td><code class="language-plaintext highlighter-rouge">ai</code> <code class="language-plaintext highlighter-rouge">session</code> <code class="language-plaintext highlighter-rouge">configure</code></td>
+      <td><code class="language-plaintext highlighter-rouge">pip install 'dot-swarm[ai]'</code></td>
+    </tr>
+    <tr>
+      <td><strong>Agent roles</strong></td>
+      <td><code class="language-plaintext highlighter-rouge">role</code> <code class="language-plaintext highlighter-rouge">inspect</code> — proof-of-work gate, inspector/supervisor roles</td>
+      <td>base</td>
+    </tr>
+    <tr>
+      <td><strong>MCP server</strong></td>
+      <td><code class="language-plaintext highlighter-rouge">dot-swarm-mcp</code> — Claude Code / Cursor / Windsurf native</td>
+      <td>base</td>
+    </tr>
+  </tbody>
+</table>
 
 <hr />
 
@@ -373,67 +388,6 @@ swarm heal                    <span class="c"># verify alignment after crawl</sp
     </tr>
   </tbody>
 </table>
-
-<p>dot_swarm is distinct from Gastown/Beads in being <strong>multi-master</strong> (no Mayor
-bottleneck), <strong>feature-toggleable</strong> (every layer is opt-in), and <strong>federation-capable</strong>
-across separate repos and organizations via signed OGP-lite messages.</p>
-
-<hr />
-
-<h2 id="relationship-to-gastown--beads">Relationship to Gastown / Beads</h2>
-
-<p>dot_swarm and Gastown solve overlapping problems with different tradeoffs:</p>
-
-<table>
-  <thead>
-    <tr>
-      <th> </th>
-      <th>dot_swarm</th>
-      <th>Gastown + Beads</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>Storage</td>
-      <td>Markdown + git</td>
-      <td>Dolt (version-controlled SQL) + SQLite</td>
-    </tr>
-    <tr>
-      <td>Coordination model</td>
-      <td>Multi-master stigmergy</td>
-      <td>Single Mayor per colony</td>
-    </tr>
-    <tr>
-      <td>Feature toggles</td>
-      <td>Every layer opt-in</td>
-      <td>Fixed architecture</td>
-    </tr>
-    <tr>
-      <td>Cross-org federation</td>
-      <td>OGP-lite signed messages</td>
-      <td>Single workspace</td>
-    </tr>
-    <tr>
-      <td>IDE integration</td>
-      <td>MCP server (native)</td>
-      <td>tmux sessions</td>
-    </tr>
-    <tr>
-      <td>Agent roles</td>
-      <td>inspector / watchdog / supervisor / librarian</td>
-      <td>Mayor / Polecats / Refinery / Witness / Deacon</td>
-    </tr>
-    <tr>
-      <td>Dependencies</td>
-      <td>Zero (stdlib + click + mcp)</td>
-      <td>Dolt + SQLite3 + tmux</td>
-    </tr>
-  </tbody>
-</table>
-
-<p>Both are inspired by Steve Yegge’s work and the broader stigmergy literature. dot_swarm
-was specifically designed to work in environments where you cannot install a database,
-and where no single agent should be a required coordinator.</p>
 
 <hr />
 
