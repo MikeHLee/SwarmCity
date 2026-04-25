@@ -5,7 +5,7 @@ nav_order: 1
 ---
 
 <div align="center">
-  <img src="logo_white.gif" alt="dot_swarm" width="420" style="background:#111;border-radius:8px;padding:16px;" />
+  <img src="logo.gif" alt="dot_swarm" width="420" />
   <h1>The .Swarm Protocol</h1>
   <p><strong>An ecologically-inspired, environment-first coordination protocol for multi-agent AI teams.</strong></p>
   <p>No central node. No database. No credentials. Agents leave structured traces; the environment does the coordination.</p>

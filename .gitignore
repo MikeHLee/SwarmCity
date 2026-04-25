@@ -20,10 +20,6 @@ frames/
 # Keep output GIFs (negation rules)
 !logo.gif
 !icon.gif
-!logo_black.gif
-!logo_white.gif
-!icon_black.gif
-!icon_white.gif
 
 # dot_swarm trail — remove to make visible (swarm trail visible)
 .swarm/

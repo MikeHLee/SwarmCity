@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="logo_white.gif" alt="dot_swarm" width="420" style="background:#111;border-radius:8px;padding:16px;" />
+  <img src="logo.gif" alt="dot_swarm" width="420" />
   <h1>The .Swarm Protocol</h1>
   <p><strong>An ecologically-inspired, environment-first coordination protocol for multi-agent AI teams.</strong></p>
   <p>No central node. No database. No credentials. Agents leave structured traces; the environment does the coordination.</p>
@@ -10,24 +10,6 @@
     <a href="https://github.com/oasis-main/dot_swarm">GitHub</a>
   </p>
 </div>
-
----
-
-## What's in the Box
-
-dot_swarm is a layered toolkit. Every layer is opt-in — start with zero dependencies and add AI, security, roles, and federation only when you need them.
-
-| Layer | Commands | Install |
-|-------|----------|---------|
-| **Core protocol** | `init` `status` `add` `claim` `done` `partial` `block` `ready` `handoff` | `pip install dot-swarm` |
-| **Situational awareness** | `ls` `explore` `report` `audit` `heal` `crawl` | base |
-| **Agent spawning** | `spawn` — launch workers and roles in named tmux windows | base |
-| **Scheduling & workflows** | `schedule` `workflow` | base |
-| **Cross-repo federation** | `federation` | base |
-| **Cryptographic signing** | auto — every `init` generates an HMAC-SHA256 identity | base |
-| **AI operations** | `ai` `session` `configure` | `pip install 'dot-swarm[ai]'` |
-| **Agent roles** | `role` `inspect` — proof-of-work gate, inspector/supervisor roles | base |
-| **MCP server** | `dot-swarm-mcp` — Claude Code / Cursor / Windsurf native | base |
 
 ---
 
@@ -46,6 +28,7 @@ Existing solutions require infrastructure that gets in the way:
 - **Jira / Linear / GitHub Issues** — web UIs, API credentials, no agent-native format
 - **Database-backed tools** — binary files, server processes, another thing to run
 - **Slack bots / webhooks** — async, lossy, not git-auditable
+- **Central orchestrators** — the coordinator itself becomes the bottleneck; every assignment, conflict, and status check flows through one node that must be available, consistent, and fast enough for the whole fleet
 
 The answer isn't a better tracker. It's a different model entirely.
 
@@ -184,7 +167,7 @@ Organization (your-company/)       ← cross-repo initiatives
 Work items use level-prefixed IDs: `ORG-001`, `API-042`, `MOB-017`. Cross-division items
 live at org level with `refs:` pointers in each affected division's queue.
 
-Use `swarm ascend` and `swarm descend` to check alignment across levels.
+**Navigating the hierarchy.** `swarm ascend` checks whether the current division's work aligns with org-level priorities — are we working on the right things? `swarm descend` checks whether org-level initiatives have corresponding tasks in each division — are we missing work anywhere?
 
 ---
 
@@ -238,6 +221,10 @@ pip install dot-swarm
 
 #### Multi-agent mode with spawning and roles
 
+When multiple agents work in parallel, you need more than a queue — you need **structured handoffs with proof-of-work gates**. A worker shouldn't mark a task done until an independent inspector verifies the output. This prevents agents from claiming completion on half-finished or broken work.
+
+`swarm spawn` launches agents in isolated tmux windows, each reading the same `.swarm/` state. The inspector role gates completion: workers call `swarm partial` with proof (branch, commit, tests), and only an inspector's `swarm inspect --pass` unlocks `done`.
+
 ```bash
 # Enable inspector role — workers must prove completion before done
 swarm role enable inspector --max-iterations 3 --require-proof "branch,commit,tests"
@@ -262,12 +249,40 @@ swarm audit --full
 
 #### Directory cataloging
 
+`swarm crawl` walks your working tree and builds a structural map in `context.md`. This gives incoming agents immediate orientation — what directories exist, what they contain, how the project is organized. Use `--create-items` to auto-generate queue entries for directories that need attention.
+
+**Detecting staleness.** The `.swarm/` state can drift from the underlying codebase. Files referenced in `context.md` may be deleted; directories may be renamed; work items may reference code that no longer exists. `swarm heal` compares the current filesystem against recorded state and flags inconsistencies. `swarm audit` goes further — it checks claim age against a staleness threshold (default 24h), flags items whose dependencies have changed, and identifies orphaned entries that no longer map to anything in the code.
+
 ```bash
 # Walk the working tree and build context for all divisions
 swarm crawl                   # writes Directory Map to context.md
 swarm crawl --create-items    # also creates queue items for uncatalogued dirs
+
+# Detect drift between .swarm/ state and actual codebase
 swarm heal                    # verify alignment after crawl
+
+# Audit for stale claims, broken dependencies, orphaned items
+swarm audit                   # quick check
+swarm audit --full            # deep scan including staleness window
 ```
+
+---
+
+## Command Reference
+
+dot_swarm is a layered toolkit. Every layer is opt-in — start with zero dependencies and add AI, security, roles, and federation only when you need them.
+
+| Layer | Commands | Install |
+|-------|----------|---------|
+| **Core protocol** | `init` `status` `add` `claim` `done` `partial` `block` `ready` `handoff` | `pip install dot-swarm` |
+| **Situational awareness** | `ls` `explore` `report` `audit` `heal` `crawl` | base |
+| **Agent spawning** | `spawn` — launch workers and roles in named tmux windows | base |
+| **Scheduling & workflows** | `schedule` `workflow` | base |
+| **Cross-repo federation** | `federation` | base |
+| **Cryptographic signing** | auto — every `init` generates an HMAC-SHA256 identity | base |
+| **AI operations** | `ai` `session` `configure` | `pip install 'dot-swarm[ai]'` |
+| **Agent roles** | `role` `inspect` — proof-of-work gate, inspector/supervisor roles | base |
+| **MCP server** | `dot-swarm-mcp` — Claude Code / Cursor / Windsurf native | base |
 
 ---
 
@@ -281,30 +296,6 @@ swarm heal                    # verify alignment after crawl
 | Context window dumps to external system | Context lives where the code lives |
 | Bottleneck grows with fleet size | Throughput scales with number of agents |
 | Complex de-duplication logic needed | Optimistic claims + audit resolves conflicts |
-
-dot_swarm is distinct from Gastown/Beads in being **multi-master** (no Mayor
-bottleneck), **feature-toggleable** (every layer is opt-in), and **federation-capable**
-across separate repos and organizations via signed OGP-lite messages.
-
----
-
-## Relationship to Gastown / Beads
-
-dot_swarm and Gastown solve overlapping problems with different tradeoffs:
-
-| | dot_swarm | Gastown + Beads |
-|---|---|---|
-| Storage | Markdown + git | Dolt (version-controlled SQL) + SQLite |
-| Coordination model | Multi-master stigmergy | Single Mayor per colony |
-| Feature toggles | Every layer opt-in | Fixed architecture |
-| Cross-org federation | OGP-lite signed messages | Single workspace |
-| IDE integration | MCP server (native) | tmux sessions |
-| Agent roles | inspector / watchdog / supervisor / librarian | Mayor / Polecats / Refinery / Witness / Deacon |
-| Dependencies | Zero (stdlib + click + mcp) | Dolt + SQLite3 + tmux |
-
-Both are inspired by Steve Yegge's work and the broader stigmergy literature. dot_swarm
-was specifically designed to work in environments where you cannot install a database,
-and where no single agent should be a required coordinator.
 
 ---
 
