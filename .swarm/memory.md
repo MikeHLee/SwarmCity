@@ -98,3 +98,43 @@ brand than MkDocs Material's dark purple defaults.
 
 **MkDocs-specific syntax converted**: `!!! note/warning/quote` admonitions →
 `{: .note }` / `{: .warning }` callouts; `=== "Tab"` sections → plain H4 headings.
+
+---
+
+## 2026-04-25 — Logo engine ownership: fluid-swarm-sim is an oasis-x portfolio project, not a dot_swarm subproject (human-ML + claude-code)
+
+**Decision**: `oasis-x/portfolio/fluid-swarm-sim/` is the canonical source for
+`gen_logo.py` and the boids looping engine. dot_swarm only vends the generated
+GIFs (`icon.gif`, `logo.gif`). The engine is no longer considered a dot_swarm
+component.
+
+**Why**: The roadmap for fluid-swarm-sim has diverged from logo generation —
+it's being extended into a self-serve swarm programmer and traffic simulation
+tool under the oasis-x portfolio. Keeping it there avoids conflating dot_swarm's
+coordination-protocol scope with a general-purpose simulation product.
+
+**Practical implication**:
+- dot_swarm's README no longer documents how to regenerate logos; that lives
+  in `oasis-x/portfolio/fluid-swarm-sim/README.md` and its own `.swarm/`
+- Loop-error technique papers (SWC-008 → SIGGRAPH Talks candidate) stay
+  associated with dot_swarm for historical/authorship reasons but the engine
+  evolution happens in fluid-swarm-sim
+- Black/white GIF variants dropped in this session (unused by current
+  README/docs). One `icon.gif` + one `logo.gif` is all dot_swarm ships.
+
+---
+
+## 2026-04-25 — README orchestrator-bottleneck framing added (human-ML + claude-code)
+
+**Decision**: Teach the orchestrator-bottleneck insight directly in the README
+rather than burying it in docs. Quick-start leads; command reference follows.
+
+**Why**: New readers kept asking "why doesn't each agent run independently?"
+The answer — that single-thread orchestration is a deliberate constraint that
+makes stigmergy safe (no write-races) — is the concept that unlocks the rest
+of the design. Putting it at the top reduces re-explanation cost in issues
+and chat.
+
+**Tradeoff**: README is slightly longer up front. Accepted — the payoff is
+readers landing on the "why single orchestrator" frame before they hit the
+command reference, which is where most people would otherwise ignore it.
