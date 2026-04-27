@@ -1594,7 +1594,7 @@ def report_cmd(ctx: click.Context, out_path: str | None, only_section: str,
     output = "\n".join(lines)
 
     if out_path:
-        Path(out_path).write_text(output)
+        Path(out_path).write_text(output, encoding="utf-8")
         click.echo(f"Report written to {out_path}  ({total_active} active, {total_pending} pending)")
     else:
         click.echo(output)
