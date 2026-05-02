@@ -459,6 +459,40 @@ inter-swarm signaling is planned if the userbase warrants it.</p>
 scanner reduces but does not eliminate this risk — novel injection patterns may evade
 static rules. Treat <code class="language-plaintext highlighter-rouge">swarm heal</code> as a necessary hygiene step after any agentic run.</p>
 
+<h3 id="coming-encrypted-trails-and-the-swarm-key">Coming: encrypted trails and the swarm key</h3>
+
+<p>The biological version of stigmergy already solves the obvious “anyone can drop a
+pheromone” problem: bees and ants don’t just emit signals, they emit signals stamped
+with a colony-specific chemical signature (cuticular hydrocarbons in ants, comb wax
+in bees). A foreign forager that wanders into the wrong hive smells wrong, and the
+colony attacks within seconds. The signal carries identity <em>as part of the chemistry</em>.</p>
+
+<p>dot_swarm’s planned <strong>swarm key</strong> brings the same property to the digital trail:</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">swarm init</code> generates an additional per-swarm symmetric key (XChaCha20-Poly1305).</li>
+  <li>All trail entries, claim notes, and <code class="language-plaintext highlighter-rouge">memory.md</code> writes are sealed with AEAD using
+the swarm key. Without the key, the trail is opaque ciphertext on disk — even
+with <code class="language-plaintext highlighter-rouge">swarm trail visible</code>, a pushed <code class="language-plaintext highlighter-rouge">.swarm/</code> directory leaks no coordination
+history to anyone who clones it.</li>
+  <li>Any process that <em>doesn’t</em> hold the swarm key cannot forge an entry that will
+verify. AEAD authentication tags make tampering detectable per-entry, not just
+per-trail.</li>
+  <li>A foreign write — same filesystem, no key — is the digital equivalent of a wrong
+pheromone signature: it fails verification on the next read and <code class="language-plaintext highlighter-rouge">swarm heal</code>
+quarantines it instantly. The colony notices intruders the way colonies always
+have: by smell.</li>
+</ul>
+
+<p>This sits on top of the existing HMAC trail (which already detects post-hoc
+tampering) and turns “shared medium poisoning” from <em>the</em> fundamental tradeoff
+of stigmergy into a contained one — the medium is shared, but the <em>language</em> of
+the medium is not.</p>
+
+<p>Tracked as <strong>SWC-046</strong> in <code class="language-plaintext highlighter-rouge">.swarm/queue.md</code> (the swarm’s own roadmap) with
+design discussion in <a href="https://oasis-main.github.io/dot_swarm/ARCHITECTURE#design-roadmap">docs/ARCHITECTURE.md → Design Roadmap</a>
+and <a href="https://oasis-main.github.io/dot_swarm/SECURITY#roadmap-the-swarm-key">docs/SECURITY.md → Roadmap</a>.</p>
+
 <p>See <a href="https://oasis-main.github.io/dot_swarm/CLI_REFERENCE">CLI Reference → Security &amp; Trust Model</a> for full command reference.</p>
 
 <hr />

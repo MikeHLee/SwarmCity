@@ -173,6 +173,125 @@ swarm trail invisible        <span class="c"># hide .swarm/ from git (default on
 
 <hr />
 
+<h2 id="the-swarm-key-phase-1-shipped">The swarm key (Phase 1 shipped)</h2>
+
+<p>Phase 1 of SWC-046 has landed. <code class="language-plaintext highlighter-rouge">swarm key init</code> generates a per-swarm
+ChaCha20-Poly1305 key (<code class="language-plaintext highlighter-rouge">.swarm/.swarm_key</code>, gitignored), and from that
+moment on every entry written to <code class="language-plaintext highlighter-rouge">trail.log</code> is sealed as an AEAD
+envelope of the form <code class="language-plaintext highlighter-rouge">swae1:&lt;base64&gt;</code> — opaque on disk to anyone without
+the key, transparently decrypted by <code class="language-plaintext highlighter-rouge">swarm</code> reads. Trails written
+before key adoption stay readable as plaintext, so adopting a key does
+not invalidate prior history.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>pip <span class="nb">install</span> <span class="s1">'dot-swarm[crypto]'</span>   <span class="c"># one-time: pulls the cryptography wheel</span>
+swarm key init                    <span class="c"># generate the swarm key</span>
+swarm key status                  <span class="c"># algorithm, fingerprint, created</span>
+swarm key rotate                  <span class="c"># new key + re-seal every existing envelope</span>
+swarm key seal .swarm/memory.md   <span class="c"># encrypt one file in-place</span>
+swarm key open .swarm/memory.md   <span class="c"># decrypt back to plaintext</span>
+</code></pre></div></div>
+
+<p><code class="language-plaintext highlighter-rouge">rotate</code> retains the previous key as <code class="language-plaintext highlighter-rouge">.swarm_key.old</code> so partially-rotated
+state remains readable until you confirm the rewrap and delete it.
+Phases 2 and 3 (auto-encrypted <code class="language-plaintext highlighter-rouge">memory.md</code> / <code class="language-plaintext highlighter-rouge">state.md</code> writes; federation
+key exchange) are the remaining roadmap items.</p>
+
+<h2 id="roadmap-the-swarm-key-original-design-notes">Roadmap: the swarm key (original design notes)</h2>
+
+<p>The fundamental objection to stigmergic coordination is that the shared medium is,
+by definition, shared. Anyone who can write to <code class="language-plaintext highlighter-rouge">.swarm/</code> can in principle drop a
+poisoned pheromone. The current mitigations (HMAC-signed trail, 18-pattern
+adversarial scanner, drift detection, <code class="language-plaintext highlighter-rouge">swarm heal</code>) catch the known forms of this
+attack after the fact. The next layer catches it <em>at write time</em> — and it does so
+by borrowing the trick that real swarms use.</p>
+
+<h3 id="the-biological-prior">The biological prior</h3>
+
+<p>Ant colonies don’t get poisoned by random pheromone-emitting intruders. Each
+colony’s foragers carry a colony-specific cuticular hydrocarbon signature, and
+nestmate recognition is built around that signature: a forager that smells wrong
+is attacked on contact. Honeybees do the same with comb-wax esters. The signal
+isn’t just <em>emitted</em> into the environment — it’s <em>signed</em> by the colony’s
+chemistry, and the colony’s response to a wrong signature is reflexive and fast.</p>
+
+<p>This is not a metaphor; it is exactly the property we want from the trail.</p>
+
+<h3 id="design">Design</h3>
+
+<p><code class="language-plaintext highlighter-rouge">swarm init</code> will generate, in addition to the HMAC signing key, a per-swarm
+<strong>swarm key</strong> — a 256-bit symmetric key suitable for XChaCha20-Poly1305 AEAD.
+Both keys live at <code class="language-plaintext highlighter-rouge">.swarm/.signing_key</code> and <code class="language-plaintext highlighter-rouge">.swarm/.swarm_key</code>, both gitignored
+unconditionally.</p>
+
+<p>All writes to coordination files (<code class="language-plaintext highlighter-rouge">trail.log</code> entries, <code class="language-plaintext highlighter-rouge">memory.md</code> records,
+claim notes, decision entries) are sealed with the swarm key before being
+persisted. The on-disk format becomes a sequence of authenticated ciphertext
+records with public metadata (timestamp, agent fingerprint) and sealed payload.</p>
+
+<p>This gives three properties at once:</p>
+
+<ol>
+  <li><strong>Confidentiality.</strong> A pushed <code class="language-plaintext highlighter-rouge">.swarm/</code> directory — including under
+<code class="language-plaintext highlighter-rouge">swarm trail visible</code> — reveals no claim history, no decision content, no
+memory. The trail is hidden in plain sight; only swarms holding the key can
+read it.</li>
+  <li><strong>Authenticity.</strong> AEAD tags fail verification on any forged or modified
+record. A process that lacks the swarm key cannot insert a record that any
+honest reader will accept, and cannot tamper with an existing record without
+breaking its tag.</li>
+  <li><strong>Reflexive intrusion response.</strong> <code class="language-plaintext highlighter-rouge">swarm heal</code> and <code class="language-plaintext highlighter-rouge">swarm audit --trail</code>
+become first-line antibody responses: a record that fails AEAD verification
+is quarantined immediately and surfaced as a CRITICAL finding. The “colony”
+reacts to a wrong signature the same way an ant colony does — fast, local,
+and without consulting a central authority.</li>
+</ol>
+
+<h3 id="what-this-changes-about-the-threat-model">What this changes about the threat model</h3>
+
+<ul>
+  <li><strong>Shared medium poisoning</strong> stops being a defense-in-depth problem. Without the
+swarm key, an adversary cannot write a <em>valid</em> pheromone — only an obviously
+invalid one, which is exactly the case the colony is built to handle.</li>
+  <li><strong>Trail sharing equals history sharing</strong> stops being a sharp tradeoff.
+<code class="language-plaintext highlighter-rouge">swarm trail visible</code> becomes safe by default: the trail is durable, auditable
+to the swarm, and opaque to everyone else.</li>
+  <li><strong>Cross-swarm trust</strong> gets a clean primitive. Federation between swarms can
+exchange swarm keys (or per-channel sub-keys) under explicit policy, replacing
+the current OGP-lite signed-message scheme with end-to-end authenticated
+channels.</li>
+</ul>
+
+<h3 id="what-this-does-not-change">What this does <em>not</em> change</h3>
+
+<ul>
+  <li>A compromised agent that legitimately holds the swarm key can still write
+poisoned content. The 18-pattern adversarial scanner is still the layer that
+catches this. AEAD prevents <em>forgery from outside</em>, not <em>betrayal from inside</em> —
+and biology is the same: a worker bee that has gone rogue still smells right.</li>
+  <li>Key compromise is catastrophic. Key rotation (<code class="language-plaintext highlighter-rouge">swarm key rotate</code>) and a
+short-lived per-session subkey scheme are part of the planned design.</li>
+  <li>HMAC stays. The signing identity is a separate concern from payload
+confidentiality, and per-entry HMAC remains the simplest way to prove “this
+exact record was written by this exact agent” inside an already-decrypted
+trail.</li>
+</ul>
+
+<h3 id="phasing">Phasing</h3>
+
+<ul>
+  <li><strong>Phase 1</strong> — swarm key generation, AEAD-sealed <code class="language-plaintext highlighter-rouge">trail.log</code>, <code class="language-plaintext highlighter-rouge">swarm key rotate</code>.</li>
+  <li><strong>Phase 2</strong> — extend AEAD to <code class="language-plaintext highlighter-rouge">memory.md</code>, <code class="language-plaintext highlighter-rouge">state.md</code> decision entries, and
+claim notes; transparent decryption in <code class="language-plaintext highlighter-rouge">swarm</code> reads.</li>
+  <li><strong>Phase 3</strong> — federation: swarm-to-swarm key exchange under Doorman policy,
+replacing file-based OGP-lite with authenticated channels.</li>
+</ul>
+
+<p>XChaCha20-Poly1305 was chosen for nonce-misuse resistance (24-byte random
+nonces) and stdlib-adjacent availability (<code class="language-plaintext highlighter-rouge">pynacl</code> or <code class="language-plaintext highlighter-rouge">cryptography</code> — both
+already common in the dependency closure of any project running an agent SDK).</p>
+
+<hr />
+
 <h2 id="threat-model-summary">Threat model summary</h2>
 
 <table>
