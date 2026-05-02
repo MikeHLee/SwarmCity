@@ -51,6 +51,8 @@ class WorkItem:
     proof: str = ""              # worker-supplied evidence for Inspector verification
     inspect_fails: int = 0      # times Inspector has rejected this item
     max_retries: int = 0        # 0 = use role default; >0 overrides at task level
+    # Transient (resolution-time only — not persisted in queue.md):
+    competitors: list["Claim"] = field(default_factory=list)
 
     # Regex patterns for parsing queue.md lines
     # Matches: - [>] [ORG-002] [CLAIMED · claude-code · 2026-03-26T14:30Z] description

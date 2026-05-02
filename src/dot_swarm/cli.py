@@ -39,7 +39,7 @@ def _default_agent() -> str:
 
 @click.group()
 @click.option("--path", default=".", help="Path to operate on (default: cwd)")
-@click.version_option("0.3.2")
+@click.version_option("1.0.0")
 @click.pass_context
 def cli(ctx: click.Context, path: str) -> None:
     """dot_swarm — markdown-native agent orchestration.
@@ -98,12 +98,9 @@ def init(ctx: click.Context, level: str | None, division_code: str | None,
     click.echo(f"Initializing .swarm/ at {level_str} level in {p}")
 
     swarm_dir.mkdir(exist_ok=True)
-    code = division_code or _division_code_from_paths(SwarmPaths(
-        root=swarm_dir, bootstrap=swarm_dir/"BOOTSTRAP.md",
-        context=swarm_dir/"context.md", state=swarm_dir/"state.md",
-        queue=swarm_dir/"queue.md", memory=swarm_dir/"memory.md",
-        workflows=swarm_dir/"workflows",
-    ))
+    code = division_code or _division_code_from_paths(
+        SwarmPaths.from_swarm_dir(swarm_dir)
+    )
     name = division_name or p.name
 
     # BOOTSTRAP.md
@@ -170,6 +167,10 @@ def init(ctx: click.Context, level: str | None, division_code: str | None,
     if not is_div:
         (swarm_dir / "workflows").mkdir(exist_ok=True)
 
+    # Append-only claim trail directory (created up front so all
+    # lifecycle operations append rather than fall back to queue.md).
+    (swarm_dir / "claims").mkdir(exist_ok=True)
+
     # Generate signing identity (idempotent — skipped if already exists)
     from . import signing as _sign
     _sign.generate_identity(swarm_dir)
@@ -210,6 +211,70 @@ def init(ctx: click.Context, level: str | None, division_code: str | None,
     click.echo("  4. Run 'swarm add \"first task\"' to add a work item")
     if is_div:
         click.echo("  5. Add GEMINI_API_KEY to GitHub secrets to enable drift checks")
+
+
+# ---------------------------------------------------------------------------
+# swarm migrate — bring legacy .swarm/ directories up to the v1.0 layout
+# ---------------------------------------------------------------------------
+
+@cli.command()
+@click.option("--dry-run", is_flag=True, default=False,
+              help="Report what would change without writing anything")
+@click.option("--all", "all_divisions", is_flag=True, default=False,
+              help="Migrate every .swarm/ found under the current path")
+@click.option("--depth", default=3, show_default=True,
+              help="Discovery depth when used with --all")
+@click.pass_context
+def migrate(ctx: click.Context, dry_run: bool, all_divisions: bool, depth: int) -> None:
+    """Bring a legacy .swarm/ directory up to the v1.0 protocol layout.
+
+    Idempotent and content-preserving. Creates missing structural pieces
+    that v1.0 expects:
+
+    \b
+      claims/                          — append-only claim trail (SWC-033)
+      federation/strangers/[rejected/] — untrusted message bay
+      .gitignore                       — .swarm_key / .swarm_key.old entries
+
+    Also backfills a synthetic claim record for any item currently
+    marked CLAIMED in queue.md that has no record in claims/, so the
+    resolver renders the same state before and after.
+
+    \b
+    swarm migrate                 # one division (cwd)
+    swarm migrate --dry-run       # preview without writing
+    swarm migrate --all           # every .swarm/ under cwd
+    """
+    from . import migrate as _mig
+
+    root = Path(ctx.obj["path"]).resolve()
+    if all_divisions:
+        reports = _mig.migrate_tree(root, dry_run=dry_run, depth=depth)
+        if not reports:
+            click.echo(f"No .swarm/ directories found under {root}.")
+            return
+    else:
+        paths = _get_paths(ctx.obj["path"])
+        reports = [_mig.migrate_swarm(paths.root, dry_run=dry_run)]
+
+    label = "Would apply" if dry_run else "Applied"
+    total_actions = total_needed = 0
+    for r in reports:
+        if r.already_current:
+            click.echo(f"  ✓ {r.swarm_path} — already at v1.0 layout.")
+            continue
+        click.echo(f"\n  {r.swarm_path}")
+        for line in (r.needed if dry_run else r.actions):
+            click.echo(f"    · {line}")
+        total_actions += len(r.actions)
+        total_needed += len(r.needed)
+
+    click.echo("")
+    if dry_run:
+        click.echo(f"Dry run: {total_needed} change(s) would be made across "
+                   f"{len(reports)} division(s). Re-run without --dry-run to apply.")
+    else:
+        click.echo(f"{label} {total_actions} change(s) across {len(reports)} division(s).")
 
 
 # ---------------------------------------------------------------------------
@@ -1114,7 +1179,127 @@ def federation_apply(ctx: click.Context, message_file: str, yes: bool) -> None:
         click.echo(f"✓ {result['reason']}")
     else:
         click.echo(f"✗ {result['reason']}", err=True)
+        if result.get("quarantined"):
+            click.echo(
+                f"  Held in strangers/. Review with 'swarm federation strangers list'.",
+                err=True,
+            )
         raise SystemExit(1)
+
+
+@federation_group.command(name="triage")
+@click.pass_context
+def federation_triage(ctx: click.Context) -> None:
+    """Sweep inbox/ — quarantine messages from unknown peers into strangers/.
+
+    Trusted messages remain in inbox/ awaiting explicit ``swarm federation
+    apply``. Untrusted messages are moved to strangers/ for human review
+    via ``swarm federation strangers``.
+    """
+    from . import federation as _fed
+    paths = _get_paths(ctx.obj["path"])
+    counts = _fed.triage_inbox(paths.root)
+    click.echo(
+        f"Triage: {counts['trusted']} trusted (kept in inbox/), "
+        f"{counts['quarantined']} quarantined to strangers/, "
+        f"{counts['errors']} errors"
+    )
+
+
+@federation_group.group(name="strangers")
+@click.pass_context
+def federation_strangers(ctx: click.Context) -> None:
+    """Untrusted message bay — collaborative-but-untrusted holding area.
+
+    Messages from peers we do not yet trust (no matching fingerprint in
+    trusted_peers/) or from disabled intents land here instead of being
+    silently dropped. The bay preserves the message for review while
+    granting the sender no write access to the queue.
+
+    \b
+    swarm federation strangers list           list quarantined messages
+    swarm federation strangers show <file>    pretty-print one message
+    swarm federation strangers promote <file> trust the peer + replay
+    swarm federation strangers reject <file>  archive without trust
+    """
+
+
+@federation_strangers.command(name="list")
+@click.pass_context
+def federation_strangers_list(ctx: click.Context) -> None:
+    """List every message currently held in the strangers bay."""
+    from . import federation as _fed
+    paths = _get_paths(ctx.obj["path"])
+    entries = _fed.list_strangers(paths.root)
+    if not entries:
+        click.echo("Strangers bay is empty.")
+        return
+    click.echo(f"{'Timestamp':<18}  {'From fp':<10}  {'Intent':<18}  File")
+    click.echo("-" * 75)
+    for e in entries:
+        click.echo(
+            f"{e['timestamp']:<18}  {(e['from_fingerprint'] or '?')[:8]:<10}  "
+            f"{e['intent'] or '?':<18}  {e['file']}"
+        )
+    click.echo(f"\n{len(entries)} stranger(s) held for review.")
+
+
+@federation_strangers.command(name="show")
+@click.argument("filename")
+@click.pass_context
+def federation_strangers_show(ctx: click.Context, filename: str) -> None:
+    """Pretty-print a single stranger message + the doorman reason."""
+    from . import federation as _fed
+    paths = _get_paths(ctx.obj["path"])
+    data = _fed.read_stranger(paths.root, filename)
+    if data is None:
+        click.echo(f"Error: no stranger message at {filename}", err=True)
+        raise SystemExit(1)
+    import json as _json
+    click.echo(_json.dumps(data, indent=2))
+    reason_path = paths.root / _fed.STRANGERS_DIR / f"{filename}.reason.txt"
+    if reason_path.exists():
+        click.echo("\nQuarantine reason:")
+        click.echo(reason_path.read_text(encoding="utf-8"))
+
+
+@federation_strangers.command(name="promote")
+@click.argument("filename")
+@click.option("--name", default="", help="Display name for this peer")
+@click.option("--scopes", default="work_request,alignment_signal",
+              help="Comma-separated list of permitted intents")
+@click.pass_context
+def federation_strangers_promote(ctx: click.Context, filename: str, name: str, scopes: str) -> None:
+    """Trust the peer behind this stranger message and move it back to inbox/."""
+    from . import federation as _fed
+    paths = _get_paths(ctx.obj["path"])
+    scope_list = [s.strip() for s in scopes.split(",") if s.strip()]
+    try:
+        peer, dest = _fed.promote_stranger(paths.root, filename,
+                                           scopes=scope_list, display_name=name)
+    except (FileNotFoundError, ValueError) as exc:
+        click.echo(f"Error: {exc}", err=True)
+        raise SystemExit(1)
+    click.echo(f"✓ Trusted: {peer.display_name} [{peer.fingerprint}]")
+    click.echo(f"  Scopes: {', '.join(peer.scopes)}")
+    click.echo(f"  Message moved to inbox: {dest.name}")
+    click.echo(f"  Apply: swarm federation apply {dest}")
+
+
+@federation_strangers.command(name="reject")
+@click.argument("filename")
+@click.option("--reason", default="", help="Why this stranger was rejected")
+@click.pass_context
+def federation_strangers_reject(ctx: click.Context, filename: str, reason: str) -> None:
+    """Archive a stranger message into strangers/rejected/ without trust."""
+    from . import federation as _fed
+    paths = _get_paths(ctx.obj["path"])
+    try:
+        dest = _fed.reject_stranger(paths.root, filename, reason=reason)
+    except FileNotFoundError as exc:
+        click.echo(f"Error: {exc}", err=True)
+        raise SystemExit(1)
+    click.echo(f"✓ Rejected: {dest}")
 
 
 # ---------------------------------------------------------------------------
@@ -2299,6 +2484,303 @@ def trail_visible(ctx: click.Context) -> None:
     click.echo("  Run 'git add .swarm/' to stage the trail for your next commit.")
 
 
+@trail.command(name="claims")
+@click.option("--item", "item_id", default=None,
+              help="Filter to one work item ID (default: all)")
+@click.pass_context
+def trail_claims(ctx: click.Context, item_id: str | None) -> None:
+    """Show the append-only claim-trail history for an item (or all items).
+
+    The .swarm/claims/ directory holds one immutable JSON record per
+    state transition. Listing them in chronological order reconstructs
+    every claim, partial, competition, and release that has ever
+    happened to a work item — without ever mutating prior records.
+    """
+    from .operations import read_claims
+    paths = _get_paths(ctx.obj["path"])
+    claims = read_claims(paths)
+    if item_id:
+        claims = [c for c in claims if c.item_id == item_id]
+    if not claims:
+        target = item_id or "any item"
+        click.echo(f"No claim records found for {target}.")
+        return
+    claims.sort(key=lambda c: c.timestamp)
+    click.echo(f"{'Timestamp':<18}  {'Item':<10}  {'Agent':<20}  State    Note")
+    click.echo("-" * 80)
+    for c in claims:
+        ts = c.timestamp.strftime("%Y-%m-%dT%H:%MZ")
+        note = (c.note[:32] + "…") if len(c.note) > 32 else c.note
+        click.echo(f"{ts:<18}  {c.item_id:<10}  {c.agent_id[:20]:<20}  "
+                   f"{c.state.value:<8} {note}")
+    click.echo(f"\n{len(claims)} record(s).")
+
+
+# ---------------------------------------------------------------------------
+# swarm compete — multi-claimant management
+# ---------------------------------------------------------------------------
+
+@cli.group(name="compete")
+@click.pass_context
+def compete(ctx: click.Context) -> None:
+    """Manage competing claims on a single work item.
+
+    Two or more agents may simultaneously hold an active claim on the same
+    item (state COMPETING). The trail records every claimant; once the
+    work has been compared, a supervisor or inspector picks a winner and
+    the losing claims are recorded as withdrawn.
+
+    \b
+    swarm compete list <id>            show every active competitor
+    swarm compete winner <id> <agent>  promote one competitor to CLAIMED
+    """
+
+
+@compete.command(name="list")
+@click.argument("item_id")
+@click.pass_context
+def compete_list(ctx: click.Context, item_id: str) -> None:
+    """Show every agent currently holding an active competing claim."""
+    from .operations import competitors_for
+    paths = _get_paths(ctx.obj["path"])
+    rivals = competitors_for(paths, item_id)
+    if not rivals:
+        click.echo(f"No active competitors on [{item_id}].")
+        return
+    click.echo(f"Active competitors on [{item_id}] ({len(rivals)}):")
+    for c in rivals:
+        ts = c.timestamp.strftime("%Y-%m-%dT%H:%MZ")
+        proof = f"  proof: {c.proof}" if c.proof else ""
+        click.echo(f"  · {c.agent_id}  [{c.state.value}]  {ts}{proof}")
+
+
+@compete.command(name="winner")
+@click.argument("item_id")
+@click.argument("winner_agent")
+@click.option("--reason", default="", help="Why this competitor won")
+@click.pass_context
+def compete_winner(ctx: click.Context, item_id: str, winner_agent: str, reason: str) -> None:
+    """Promote one competitor to CLAIMED winner; mark others as withdrawn."""
+    from .operations import promote_competitor
+    paths = _get_paths(ctx.obj["path"])
+    try:
+        winner, losers = promote_competitor(paths, item_id, winner_agent, reason=reason)
+    except ValueError as exc:
+        click.echo(f"Error: {exc}", err=True)
+        sys.exit(1)
+    click.echo(f"✓ Promoted: {winner.agent_id} on [{item_id}] (state CLAIMED)")
+    if losers:
+        click.echo(f"  Withdrawn: {', '.join(l.agent_id for l in losers)}")
+    if reason:
+        click.echo(f"  Reason: {reason}")
+
+
+# ---------------------------------------------------------------------------
+# swarm seal — hidden-in-plain-sight stigmergic authentication
+# ---------------------------------------------------------------------------
+
+@cli.group(name="seal")
+@click.pass_context
+def seal_group(ctx: click.Context) -> None:
+    """Sign and verify HMAC seals embedded inline in coordination files.
+
+    A seal is a short HTML comment appended to coordination text — it
+    looks like ordinary markdown to anyone reading the file, but
+    cryptographically authenticates the writer to anyone holding the
+    swarm signing key. Foreign or forged content fails verification.
+
+    \b
+    swarm seal sign <file> --agent <id>   stamp a file with a seal
+    swarm seal verify [--path PATH]       verify every sealed file
+    swarm seal check <file>               verify one file
+    """
+
+
+@seal_group.command(name="sign")
+@click.argument("file_path", type=click.Path(exists=True, dir_okay=False))
+@click.option("--agent", default=None, help="Agent ID (default: $SWARM_AGENT_ID or human-$USER)")
+@click.pass_context
+def seal_sign(ctx: click.Context, file_path: str, agent: str | None) -> None:
+    """Append (or refresh) a seal on the given coordination file."""
+    from . import seals as _seals
+    paths = _get_paths(ctx.obj["path"])
+    agent_id = agent or _default_agent()
+    p = Path(file_path)
+    text = p.read_text(encoding="utf-8")
+    try:
+        sealed = _seals.seal_content(text, agent_id, paths.root)
+    except FileNotFoundError as exc:
+        click.echo(f"Error: {exc}", err=True)
+        sys.exit(1)
+    p.write_text(sealed, encoding="utf-8")
+    click.echo(f"✓ Sealed {p} for agent {agent_id}")
+
+
+@seal_group.command(name="check")
+@click.argument("file_path", type=click.Path(exists=True, dir_okay=False))
+@click.pass_context
+def seal_check(ctx: click.Context, file_path: str) -> None:
+    """Verify a single file's seal status."""
+    from . import seals as _seals
+    paths = _get_paths(ctx.obj["path"])
+    text = Path(file_path).read_text(encoding="utf-8")
+    result = _seals.verify_content(text, paths.root)
+    icon = {"VALID": "✓", "INVALID": "✗", "MISSING": "·", "UNKEYED": "?"}[result.status.value]
+    click.echo(f"  {icon} {file_path} — {result.status.value}"
+               + (f" (agent={result.agent})" if result.agent else ""))
+    if result.status.value == "INVALID":
+        sys.exit(2)
+
+
+@seal_group.command(name="verify")
+@click.pass_context
+def seal_verify(ctx: click.Context) -> None:
+    """Sweep .swarm/ for seals and report status of every coordination file."""
+    from . import seals as _seals
+    paths = _get_paths(ctx.obj["path"])
+    reports = _seals.scan_swarm_seals(paths.root)
+    if not reports:
+        click.echo("No coordination files found under .swarm/.")
+        return
+
+    counts = {"VALID": 0, "INVALID": 0, "MISSING": 0, "UNKEYED": 0}
+    for r in reports:
+        counts[r.result.status.value] = counts.get(r.result.status.value, 0) + 1
+        icon = {"VALID": "✓", "INVALID": "✗", "MISSING": "·", "UNKEYED": "?"}[r.result.status.value]
+        agent = f" (agent={r.result.agent})" if r.result.agent else ""
+        click.echo(f"  {icon} {r.label} — {r.result.status.value}{agent}")
+
+    click.echo(
+        f"\n  {counts['VALID']} valid, {counts['INVALID']} invalid, "
+        f"{counts['MISSING']} unsealed, {counts['UNKEYED']} unkeyed"
+    )
+    if counts["INVALID"]:
+        click.echo("\n  ⚠  Invalid seals detected — run 'swarm heal' to quarantine.")
+        sys.exit(2)
+
+
+# ---------------------------------------------------------------------------
+# swarm key — AEAD-encrypted trail under the per-swarm symmetric key (SWC-046)
+# ---------------------------------------------------------------------------
+
+@cli.group(name="key")
+@click.pass_context
+def key_group(ctx: click.Context) -> None:
+    """Manage the swarm key — confidentiality for the coordination trail.
+
+    The swarm key is a per-swarm symmetric AEAD key (ChaCha20-Poly1305).
+    When present, trail.log entries are written as opaque envelopes
+    rather than plaintext JSON — the medium becomes shared but the
+    *language* of the medium is not.
+
+    Requires the optional 'cryptography' package:
+      pip install 'dot-swarm[crypto]'
+
+    \b
+    swarm key init                 generate a swarm key (idempotent)
+    swarm key status               show key fingerprint, algorithm, age
+    swarm key rotate               new key + re-seal every existing envelope
+    swarm key seal <file>          encrypt one coordination file in-place
+    swarm key open <file>          decrypt one coordination file in-place
+    """
+
+
+@key_group.command(name="init")
+@click.pass_context
+def key_init(ctx: click.Context) -> None:
+    """Generate a swarm key (idempotent — does nothing if one already exists)."""
+    from . import vault as _vault
+    paths = _get_paths(ctx.obj["path"])
+    try:
+        meta = _vault.generate_swarm_key(paths.root)
+    except _vault.CryptoUnavailable as exc:
+        click.echo(f"Error: {exc}", err=True)
+        sys.exit(1)
+    click.echo(f"✓ Swarm key ready  [fingerprint {meta.fingerprint}]")
+    click.echo(f"  Algorithm: {meta.algorithm}")
+    click.echo(f"  Created:   {meta.created}")
+    click.echo("  Trail entries from now on will be sealed under this key.")
+    click.echo("  Back up .swarm/.swarm_key — losing it makes the trail unreadable.")
+
+
+@key_group.command(name="status")
+@click.pass_context
+def key_status(ctx: click.Context) -> None:
+    """Show whether a swarm key is present and its public metadata."""
+    from . import vault as _vault
+    paths = _get_paths(ctx.obj["path"])
+    if not _vault.has_swarm_key(paths.root):
+        click.echo("No swarm key. Run 'swarm key init' to generate one.")
+        return
+    try:
+        meta = _vault.load_swarm_key_metadata(paths.root)
+    except FileNotFoundError:
+        click.echo("Swarm key file present but metadata missing — run 'swarm key init'.", err=True)
+        sys.exit(1)
+    click.echo(f"Algorithm:   {meta.algorithm}")
+    click.echo(f"Fingerprint: {meta.fingerprint}")
+    click.echo(f"Created:     {meta.created}")
+    if meta.rotated_at:
+        click.echo(f"Last rotate: {meta.rotated_at}")
+    if (paths.root / _vault.SWARM_KEY_OLD_FILE).exists():
+        click.echo("Previous key still on disk (.swarm_key.old). "
+                   "Delete once you've confirmed the rotation.")
+
+
+@key_group.command(name="rotate")
+@click.confirmation_option(
+    prompt="Rotate the swarm key? This re-seals every existing envelope."
+)
+@click.pass_context
+def key_rotate(ctx: click.Context) -> None:
+    """Generate a new swarm key and re-seal every existing envelope under it."""
+    from . import vault as _vault
+    paths = _get_paths(ctx.obj["path"])
+    try:
+        meta, result = _vault.rotate_swarm_key(paths.root)
+    except (FileNotFoundError, _vault.CryptoUnavailable) as exc:
+        click.echo(f"Error: {exc}", err=True)
+        sys.exit(1)
+    click.echo(f"✓ Rotated. New fingerprint: {meta.fingerprint}")
+    click.echo(
+        f"  Re-sealed {result.lines_rewrapped} envelope(s) "
+        f"across {result.files_rewrapped} file(s); "
+        f"{result.failed} failed; "
+        f"{result.skipped_plaintext} plaintext line(s) untouched."
+    )
+    click.echo("  Previous key retained at .swarm_key.old — delete after verifying.")
+
+
+@key_group.command(name="seal")
+@click.argument("file_path", type=click.Path(exists=True, dir_okay=False))
+@click.pass_context
+def key_seal(ctx: click.Context, file_path: str) -> None:
+    """Encrypt a single coordination file in-place under the swarm key."""
+    from . import vault as _vault
+    paths = _get_paths(ctx.obj["path"])
+    try:
+        _vault.seal_file(Path(file_path), paths.root)
+    except (FileNotFoundError, _vault.CryptoUnavailable) as exc:
+        click.echo(f"Error: {exc}", err=True)
+        sys.exit(1)
+    click.echo(f"✓ Sealed {file_path} (envelope on disk).")
+
+
+@key_group.command(name="open")
+@click.argument("file_path", type=click.Path(exists=True, dir_okay=False))
+@click.pass_context
+def key_open(ctx: click.Context, file_path: str) -> None:
+    """Decrypt a single sealed file in-place to its original plaintext."""
+    from . import vault as _vault
+    paths = _get_paths(ctx.obj["path"])
+    try:
+        _vault.open_file(Path(file_path), paths.root)
+    except (FileNotFoundError, _vault.CryptoUnavailable, _vault.WrongKey) as exc:
+        click.echo(f"Error: {exc}", err=True)
+        sys.exit(1)
+    click.echo(f"✓ Opened {file_path} (plaintext restored).")
+
+
 # ---------------------------------------------------------------------------
 # swarm configure
 # ---------------------------------------------------------------------------
@@ -2851,9 +3333,9 @@ def _create_platform_shims(repo_root: Path) -> None:
         _create_if_missing(path, content)
 
 def _ensure_gitignore(swarm_dir: Path) -> None:
-    """Ensure .swarm/.gitignore excludes the private signing key and quarantine dir."""
+    """Ensure .swarm/.gitignore excludes private keys and quarantine dir."""
     gitignore = swarm_dir / ".gitignore"
-    needed = [".signing_key", "quarantine/", "trail.log"]
+    needed = [".signing_key", ".swarm_key", ".swarm_key.old", "quarantine/", "trail.log"]
     if gitignore.exists():
         existing = gitignore.read_text()
         missing = [line for line in needed if line not in existing]

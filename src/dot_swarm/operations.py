@@ -52,7 +52,7 @@ def read_queue(paths: SwarmPaths) -> tuple[list[WorkItem], list[WorkItem], list[
 
 
 def read_claims(paths: SwarmPaths) -> list[Claim]:
-    """Read all claim files from .swarm/claims/."""
+    """Read all claim files from .swarm/claims/ (append-only trail)."""
     claims = []
     if not paths.claims.is_dir():
         return []
@@ -65,22 +65,127 @@ def read_claims(paths: SwarmPaths) -> list[Claim]:
     return claims
 
 
-def write_claim(paths: SwarmPaths, claim: Claim) -> None:
-    """Write a claim file to .swarm/claims/."""
+def write_claim(paths: SwarmPaths, claim: Claim) -> Path:
+    """Append a claim record to .swarm/claims/.
+
+    Append-only: never overwrites. Each (item_id, agent_id, timestamp) triple
+    becomes a new immutable record. State transitions (CLAIMED → DONE → ...)
+    are recorded as additional records, not in-place mutations.
+    """
     paths.claims.mkdir(parents=True, exist_ok=True)
-    # File name: <item_id>_<agent_id>_<timestamp>.json (safe for filesystems)
     ts_safe = claim.timestamp.strftime("%Y%m%dT%H%M%SZ")
-    filename = f"{claim.item_id}_{claim.agent_id}_{ts_safe}.json"
-    p = paths.claims / filename
+    base = f"{claim.item_id}_{claim.agent_id}_{ts_safe}"
+    p = paths.claims / f"{base}.json"
+    suffix = 0
+    while p.exists():  # collision under same-second concurrent writes
+        suffix += 1
+        p = paths.claims / f"{base}_{suffix}.json"
     p.write_text(json.dumps(claim.to_dict(), indent=2))
+    return p
 
 
 def clear_claims(paths: SwarmPaths, item_id: str) -> None:
-    """Remove all claim files for a specific item."""
+    """DEPRECATED: destructive helper retained for compaction/tests only.
+
+    Lifecycle operations no longer call this — they append release records
+    via supersede_claims() instead, preserving the full append-only trail.
+    """
     if not paths.claims.is_dir():
         return
     for p in paths.claims.glob(f"{item_id}_*.json"):
         p.unlink()
+
+
+_ACTIVE_STATES: frozenset[ItemState] = frozenset({
+    ItemState.CLAIMED, ItemState.PARTIAL, ItemState.COMPETING, ItemState.REVIEW,
+})
+_TERMINAL_STATES: frozenset[ItemState] = frozenset({
+    ItemState.DONE, ItemState.BLOCKED, ItemState.CANCELLED,
+})
+
+
+def supersede_claims(
+    paths: SwarmPaths,
+    item_id: str,
+    new_state: ItemState,
+    agent_id: str = "system",
+    note: str = "",
+    proof: str = "",
+) -> Path:
+    """Append a release record that supersedes prior active claims.
+
+    Use this instead of clear_claims when transitioning an item to a new
+    lifecycle state — the prior records remain on disk for audit, and the
+    resolver picks the newest record per (item, agent) when reading.
+    """
+    return write_claim(paths, Claim(
+        item_id=item_id,
+        agent_id=agent_id,
+        state=new_state,
+        timestamp=datetime.utcnow(),
+        proof=proof,
+        note=note,
+    ))
+
+
+def competitors_for(paths: SwarmPaths, item_id: str) -> list[Claim]:
+    """Return the list of currently-active competitor claims on an item.
+
+    Per-agent newest claim is picked; only those whose latest state is in
+    {CLAIMED, COMPETING, PARTIAL, REVIEW} count as still-in-the-running.
+    """
+    by_agent: dict[str, Claim] = {}
+    for c in read_claims(paths):
+        if c.item_id != item_id:
+            continue
+        prev = by_agent.get(c.agent_id)
+        if prev is None or c.timestamp > prev.timestamp:
+            by_agent[c.agent_id] = c
+    return sorted(
+        [c for c in by_agent.values() if c.state in _ACTIVE_STATES],
+        key=lambda c: c.timestamp,
+    )
+
+
+def promote_competitor(
+    paths: SwarmPaths,
+    item_id: str,
+    winner_agent: str,
+    reason: str = "",
+) -> tuple[Claim, list[Claim]]:
+    """Promote one competitor to CLAIMED winner; record losers as withdrawn.
+
+    Returns (winner_claim, loser_claims). The winner gets a fresh CLAIMED
+    record; each other active competitor gets an OPEN release record with
+    note 'lost-competition' so the trail records the outcome.
+    """
+    rivals = competitors_for(paths, item_id)
+    winner_present = any(c.agent_id == winner_agent for c in rivals)
+    if not winner_present:
+        raise ValueError(
+            f"Agent {winner_agent!r} has no active claim on {item_id}. "
+            f"Active competitors: {[c.agent_id for c in rivals] or 'none'}"
+        )
+
+    now = datetime.utcnow()
+    winner_claim = Claim(
+        item_id=item_id, agent_id=winner_agent, state=ItemState.CLAIMED,
+        timestamp=now, note=f"promoted-winner: {reason}".strip(": "),
+    )
+    write_claim(paths, winner_claim)
+
+    losers: list[Claim] = []
+    for c in rivals:
+        if c.agent_id == winner_agent:
+            continue
+        loser = Claim(
+            item_id=item_id, agent_id=c.agent_id, state=ItemState.OPEN,
+            timestamp=datetime.utcnow(),
+            note=f"lost-competition: winner={winner_agent}".strip(),
+        )
+        write_claim(paths, loser)
+        losers.append(loser)
+    return winner_claim, losers
 
 
 def resolve_claims(
@@ -89,19 +194,30 @@ def resolve_claims(
     done: list[WorkItem],
     claims: list[Claim],
 ) -> tuple[list[WorkItem], list[WorkItem], list[WorkItem]]:
-    """Apply dynamic claims to the base queue items."""
+    """Resolve the queue against the append-only claims trail.
+
+    Algorithm:
+      1. For each (item, agent), keep only the newest claim record.
+      2. If any agent's newest is terminal (DONE/BLOCKED/CANCELLED) and
+         strictly newer than every active record on that item, the terminal
+         state wins.
+      3. Otherwise, count agents whose newest is "active" (CLAIMED/COMPETING/
+         PARTIAL/REVIEW). Zero → OPEN. One → that state. Two or more → COMPETING.
+    """
     if not claims:
         return active, pending, done
 
     all_items = {i.id: i for i in active + pending + done}
 
-    # Group claims by item_id and find the newest for each
-    newest_claims: dict[str, Claim] = {}
+    # newest claim per (item_id, agent_id)
+    by_item_agent: dict[str, dict[str, Claim]] = {}
     for c in claims:
-        if c.item_id not in newest_claims or c.timestamp > newest_claims[c.item_id].timestamp:
-            newest_claims[c.item_id] = c
+        agents = by_item_agent.setdefault(c.item_id, {})
+        prev = agents.get(c.agent_id)
+        if prev is None or c.timestamp > prev.timestamp:
+            agents[c.agent_id] = c
 
-    for item_id, claim in newest_claims.items():
+    for item_id, agent_claims in by_item_agent.items():
         if item_id not in all_items:
             continue
         item = all_items[item_id]
@@ -110,17 +226,62 @@ def resolve_claims(
         if item.state == ItemState.DONE:
             continue
 
-        # Update item state from claim
-        item.state = claim.state
-        item.claimed_by = claim.agent_id
-        item.claimed_at = claim.timestamp
-        if claim.proof:
-            item.proof = claim.proof
-        if claim.note:
-            item.notes = (item.notes + " | " + claim.note).strip(" | ")
+        per_agent = list(agent_claims.values())
+        terminals = [c for c in per_agent if c.state in _TERMINAL_STATES]
+        actives = [c for c in per_agent if c.state in _ACTIVE_STATES]
 
-        # Re-sort into lists based on new state
-        if item.state in (ItemState.CLAIMED, ItemState.PARTIAL, ItemState.COMPETING, ItemState.REVIEW):
+        # Terminal wins if strictly newer than every active record (or no actives).
+        if terminals:
+            newest_terminal = max(terminals, key=lambda c: c.timestamp)
+            if not actives or newest_terminal.timestamp >= max(c.timestamp for c in actives):
+                item.state = newest_terminal.state
+                item.claimed_by = newest_terminal.agent_id
+                item.claimed_at = newest_terminal.timestamp
+                if newest_terminal.state == ItemState.DONE:
+                    item.done_at = newest_terminal.timestamp
+                    if newest_terminal.note:
+                        item.notes = (item.notes + " | " + newest_terminal.note).strip(" | ")
+                    if item in active:
+                        active.remove(item)
+                    if item in pending:
+                        pending.remove(item)
+                    if item not in done:
+                        done.append(item)
+                continue
+
+        if not actives:
+            # All claims released back to OPEN
+            item.state = ItemState.OPEN
+            item.claimed_by = None
+            item.claimed_at = None
+            if item in active:
+                active.remove(item)
+                pending.append(item)
+            continue
+
+        if len(actives) >= 2:
+            # Multi-agent contention → COMPETING
+            sorted_active = sorted(actives, key=lambda c: c.timestamp)
+            item.state = ItemState.COMPETING
+            item.claimed_by = ", ".join(c.agent_id for c in sorted_active)
+            item.claimed_at = sorted_active[0].timestamp
+            item.competitors = sorted_active
+            for c in sorted_active:
+                if c.proof and not item.proof:
+                    item.proof = c.proof
+        else:
+            c = actives[0]
+            item.state = c.state
+            item.claimed_by = c.agent_id
+            item.claimed_at = c.timestamp
+            if c.proof:
+                item.proof = c.proof
+            if c.note:
+                item.notes = (item.notes + " | " + c.note).strip(" | ")
+            item.competitors = []
+
+        # Re-bucket by resolved state
+        if item.state in _ACTIVE_STATES:
             if item in pending:
                 pending.remove(item)
                 active.append(item)
@@ -245,46 +406,50 @@ def next_item_id(paths: SwarmPaths, division_code: str) -> str:
 
 
 def claim_item(paths: SwarmPaths, item_id: str, agent_id: str, compete: bool = False) -> WorkItem:
-    """Claim an OPEN or already CLAIMED work item (if compete=True)."""
+    """Claim an OPEN item, or contend an already-claimed one with compete=True.
+
+    Always appends a record to the .swarm/claims/ trail. The queue.md
+    rendering is recomputed from the trail on the next read.
+    """
     active, pending, done = read_queue(paths)
     target = _find_item(pending + active, item_id)
     if target is None:
         raise ValueError(f"Item {item_id} not found in active or pending queue.")
-    
-    # Check if already claimed
+
     if target.state in (ItemState.CLAIMED, ItemState.PARTIAL, ItemState.COMPETING):
         if not compete:
             raise ValueError(
                 f"Item {item_id} is already claimed by {target.claimed_by}. "
                 "Use --compete to submit a competing implementation."
             )
-        target.state = ItemState.COMPETING
+        new_state = ItemState.COMPETING
     else:
-        target.state = ItemState.CLAIMED
+        new_state = ItemState.CLAIMED
 
+    now = datetime.utcnow()
+    write_claim(paths, Claim(
+        item_id=target.id,
+        agent_id=agent_id,
+        state=new_state,
+        timestamp=now,
+    ))
+
+    # Reflect the claim in queue.md for human readers (resolver will recompute)
+    target.state = new_state
     target.claimed_by = agent_id
-    target.claimed_at = datetime.utcnow()
-
-    # Move from pending to active if needed
+    target.claimed_at = now
     if target in pending:
         pending.remove(target)
         active.append(target)
-
     write_queue(paths, active, pending, done)
-    
-    # Forward-compatible: write claim to directory if it exists
-    if paths.claims.is_dir():
-        write_claim(paths, Claim(
-            item_id=target.id,
-            agent_id=agent_id,
-            state=target.state,
-            timestamp=target.claimed_at
-        ))
-    return target
+
+    # Re-resolve so callers see the multi-agent COMPETING aggregation
+    active, pending, done = read_queue(paths)
+    return _find_item(active + pending + done, item_id) or target
 
 
 def done_item(paths: SwarmPaths, item_id: str, agent_id: str, note: str = "") -> WorkItem:
-    """Mark a claimed item as done in queue.md and clear claims."""
+    """Mark a claimed item as done; appends a DONE release record to the trail."""
     active, pending, done = read_queue(paths)
     target = _find_item(active + pending, item_id)
     if target is None:
@@ -301,24 +466,35 @@ def done_item(paths: SwarmPaths, item_id: str, agent_id: str, note: str = "") ->
         done.append(target)
 
     write_queue(paths, active, pending, done)
-    clear_claims(paths, item_id)
+    supersede_claims(paths, item_id, ItemState.DONE, agent_id=agent_id, note=note)
     return target
 
 
-def partial_item(paths: SwarmPaths, item_id: str, agent_id: str, note: str = "") -> WorkItem:
-    """Re-claim a CLAIMED item as PARTIAL (checkpoint without completing)."""
+def partial_item(paths: SwarmPaths, item_id: str, agent_id: str, note: str = "", proof: str = "") -> WorkItem:
+    """Append a PARTIAL claim record (checkpoint without completing)."""
     active, pending, done = read_queue(paths)
     target = _find_item(active + pending, item_id)
     if target is None:
         raise ValueError(f"Item {item_id} not found in active or pending queue.")
 
+    now = datetime.utcnow()
+    write_claim(paths, Claim(
+        item_id=item_id,
+        agent_id=agent_id,
+        state=ItemState.PARTIAL,
+        timestamp=now,
+        note=note,
+        proof=proof,
+    ))
+
     target.state = ItemState.PARTIAL
     target.claimed_by = agent_id
-    target.claimed_at = datetime.utcnow()
+    target.claimed_at = now
     if note:
         target.notes = (target.notes + " | " + note).strip(" | ")
+    if proof:
+        target.proof = proof
 
-    # Ensure it stays in active
     pending = [i for i in pending if i.id != item_id]
     if target not in active:
         active.append(target)
@@ -328,7 +504,7 @@ def partial_item(paths: SwarmPaths, item_id: str, agent_id: str, note: str = "")
 
 
 def block_item(paths: SwarmPaths, item_id: str, reason: str) -> WorkItem:
-    """Mark a work item as BLOCKED with a reason and clear claims."""
+    """Mark a work item as BLOCKED; appends a BLOCKED release record."""
     active, pending, done = read_queue(paths)
     target = _find_item(active + pending, item_id)
     if target is None:
@@ -338,7 +514,7 @@ def block_item(paths: SwarmPaths, item_id: str, reason: str) -> WorkItem:
     target.notes = f"BLOCKED: {reason}"
 
     write_queue(paths, active, pending, done)
-    clear_claims(paths, item_id)
+    supersede_claims(paths, item_id, ItemState.BLOCKED, agent_id="system", note=reason)
     return target
 
 
@@ -433,7 +609,11 @@ def reopen_item(
         pending.append(target)
 
     write_queue(paths, active, pending, done)
-    clear_claims(paths, item_id)
+    final_state = ItemState.BLOCKED if exhausted else ItemState.OPEN
+    supersede_claims(
+        paths, item_id, final_state,
+        agent_id=inspector_id, note=fail_note,
+    )
     return target, exhausted
 
 

@@ -154,15 +154,34 @@ def sign_operation(
 
 
 def append_trail(swarm_path: Path, record: dict) -> None:
-    """Append a signed record to trail.log (one JSON object per line)."""
+    """Append a signed record to trail.log (one entry per line).
+
+    If a swarm key is present (``.swarm/.swarm_key``), the JSON line is
+    sealed with ChaCha20-Poly1305 before being written — the file on
+    disk becomes a sequence of ``swae1:<base64>`` envelopes opaque to
+    anyone without the key. Without the key, behaviour is unchanged
+    (plaintext JSON-per-line), and existing trails keep working.
+    """
+    from . import vault as _vault  # local import to keep crypto optional
+
     trail = swarm_path / TRAIL_FILE
-    line = json.dumps(record, separators=(",", ":")) + "\n"
+    payload = json.dumps(record, separators=(",", ":"))
+    key = _vault.load_swarm_key(swarm_path)
+    line = (_vault.seal_envelope(payload, key) if key else payload) + "\n"
     with trail.open("a", encoding="utf-8") as fh:
         fh.write(line)
 
 
 def read_trail(swarm_path: Path, limit: int = 100) -> list[dict]:
-    """Read the last *limit* entries from trail.log."""
+    """Read the last *limit* entries from trail.log.
+
+    Transparently decrypts envelope-formatted lines using the swarm key
+    (and the rotated-out previous key if present). Lines that fail
+    decryption are skipped, matching the prior behaviour for malformed
+    plaintext JSON.
+    """
+    from . import vault as _vault
+
     trail = swarm_path / TRAIL_FILE
     if not trail.exists():
         return []
@@ -172,6 +191,11 @@ def read_trail(swarm_path: Path, limit: int = 100) -> list[dict]:
         line = line.strip()
         if not line:
             continue
+        if _vault.is_envelope(line):
+            try:
+                line = _vault.try_open_envelope(line, swarm_path)
+            except (FileNotFoundError, _vault.WrongKey, _vault.TamperedEnvelope):
+                continue
         try:
             records.append(json.loads(line))
         except json.JSONDecodeError:

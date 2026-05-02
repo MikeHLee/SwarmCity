@@ -350,6 +350,38 @@ inter-swarm signaling is planned if the userbase warrants it.
 scanner reduces but does not eliminate this risk — novel injection patterns may evade
 static rules. Treat `swarm heal` as a necessary hygiene step after any agentic run.
 
+### Coming: encrypted trails and the swarm key
+
+The biological version of stigmergy already solves the obvious "anyone can drop a
+pheromone" problem: bees and ants don't just emit signals, they emit signals stamped
+with a colony-specific chemical signature (cuticular hydrocarbons in ants, comb wax
+in bees). A foreign forager that wanders into the wrong hive smells wrong, and the
+colony attacks within seconds. The signal carries identity *as part of the chemistry*.
+
+dot_swarm's planned **swarm key** brings the same property to the digital trail:
+
+- `swarm init` generates an additional per-swarm symmetric key (XChaCha20-Poly1305).
+- All trail entries, claim notes, and `memory.md` writes are sealed with AEAD using
+  the swarm key. Without the key, the trail is opaque ciphertext on disk — even
+  with `swarm trail visible`, a pushed `.swarm/` directory leaks no coordination
+  history to anyone who clones it.
+- Any process that *doesn't* hold the swarm key cannot forge an entry that will
+  verify. AEAD authentication tags make tampering detectable per-entry, not just
+  per-trail.
+- A foreign write — same filesystem, no key — is the digital equivalent of a wrong
+  pheromone signature: it fails verification on the next read and `swarm heal`
+  quarantines it instantly. The colony notices intruders the way colonies always
+  have: by smell.
+
+This sits on top of the existing HMAC trail (which already detects post-hoc
+tampering) and turns "shared medium poisoning" from *the* fundamental tradeoff
+of stigmergy into a contained one — the medium is shared, but the *language* of
+the medium is not.
+
+Tracked as **SWC-046** in `.swarm/queue.md` (the swarm's own roadmap) with
+design discussion in [docs/ARCHITECTURE.md → Design Roadmap](https://oasis-main.github.io/dot_swarm/ARCHITECTURE#design-roadmap)
+and [docs/SECURITY.md → Roadmap](https://oasis-main.github.io/dot_swarm/SECURITY#roadmap-the-swarm-key).
+
 See [CLI Reference → Security & Trust Model](https://oasis-main.github.io/dot_swarm/CLI_REFERENCE) for full command reference.
 
 ---

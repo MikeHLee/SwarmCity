@@ -1025,3 +1025,195 @@ To test the MCP server:
 - For division-level BOOTSTRAP.md, the pointer approach (option 2) is preferred over
   copying to avoid protocol drift when BOOTSTRAP.md is updated.
 - The `swarm audit` stale threshold (48h) is configurable via `SWARM_STALE_HOURS` env var.
+
+---
+
+## Design Roadmap
+
+Per-swarm operational queues live in `.swarm/queue.md` (item IDs `SWC-NNN`). The
+items below are larger architectural threads — each one is also tracked as a
+queue item but warrants design-level discussion here.
+
+### Swarm Key — AEAD-encrypted trail (queue: SWC-046, Phase 1 shipped)
+
+**Phase 1 status: shipped in v1.0.** `swarm key init` generates a per-swarm
+ChaCha20-Poly1305 key (`.swarm/.swarm_key`, 256-bit, gitignored). When
+present, every entry written to `trail.log` is sealed as a one-line
+``swae1:<urlsafe-b64 of nonce(12) || ciphertext || tag(16)>`` envelope —
+opaque on disk to anyone without the key, transparently decrypted by
+`read_trail` and the `swarm` CLI. Trails written before key adoption stay
+readable as plaintext alongside the new envelopes; adopting a key does
+not invalidate prior history.
+
+`swarm key rotate` generates a new key, retains the prior one as
+`.swarm_key.old`, and re-seals every existing envelope under the new key
+in a single sweep. Mid-rotation reads transparently fall back to the old
+key; once the rewrap is verified the operator deletes `.swarm_key.old`.
+
+`swarm key seal <file>` and `swarm key open <file>` provide explicit
+file-level encryption for any coordination file (e.g. archived `memory.md`
+snapshots) without requiring auto-encryption of the human-readable working
+files. Phases 2 and 3 (transparent decrypt at the resolver layer for
+`memory.md` / `state.md` writes; federation key exchange) remain ahead.
+
+#### Original design rationale
+
+The fundamental objection to stigmergic coordination is that the shared medium
+is, by definition, shared. The biological version of this problem was solved a
+long time ago: ants and bees recognize nestmates by colony-specific chemical
+signatures (cuticular hydrocarbons, comb-wax esters), and the response to a
+foreign signature is reflexive and fast. The signal carries identity *as part
+of the chemistry*.
+
+The **swarm key** brings that property to the trail. `swarm init` generates a
+per-swarm symmetric key (XChaCha20-Poly1305, 256-bit) alongside the existing
+HMAC signing key. All writes to coordination files are sealed with AEAD before
+being persisted.
+
+This produces three architectural shifts:
+
+1. **Confidentiality of the medium without giving up its publicness.** The
+   trail can live in git, in shared filesystems, in pushed branches, and remain
+   opaque to anyone without the swarm key. `swarm trail visible` becomes safe
+   by default rather than a tradeoff.
+2. **Forgery becomes structurally impossible from outside.** AEAD tag failure
+   on read is binary, fast, and per-record. A process without the key cannot
+   write a record any honest reader will accept; it can only write obviously
+   invalid records, which `swarm heal` quarantines as CRITICAL on contact.
+3. **Federation gets a clean primitive.** Inter-swarm trust currently relies on
+   file-based OGP-lite signed messages. With swarm keys, federation becomes
+   key exchange under Doorman policy, replacing the transport-layer scheme
+   with authenticated channels.
+
+What it does not solve: a *legitimate* agent that holds the swarm key and
+writes poisoned content. AEAD prevents forgery from outside, not betrayal from
+inside. The 18-pattern adversarial scanner remains the layer responsible for
+that case — same as biology, where a worker that has gone rogue still smells
+right.
+
+Phasing:
+
+- **Phase 1.** Key generation in `swarm init`, `swarm key rotate`, AEAD on
+  `trail.log`. HMAC signing identity stays — it serves a separate purpose
+  (binding a record to a specific agent inside an already-decrypted trail).
+- **Phase 2.** Extend AEAD to `memory.md`, `state.md` decision entries, and
+  claim notes. Transparent decryption in CLI reads when the key is present.
+- **Phase 3.** Federation: swarm-to-swarm key exchange (or per-channel
+  sub-keys) under Doorman policy.
+
+Cross-references: README → "Coming: encrypted trails and the swarm key";
+docs/SECURITY.md → "Roadmap: the swarm key".
+
+### Append-only claim trail (queue: SWC-033)
+
+`.swarm/claims/` is the canonical record of every lifecycle transition on
+every work item. Every call to `claim`, `partial`, `done`, `block`,
+`reopen`, or `compete` appends one immutable JSON record to this directory
+— prior records are never overwritten or deleted. State changes that look
+like mutations in `queue.md` (CLAIMED → DONE, COMPETING → CLAIMED) are
+expressed in the trail as *new* records that supersede earlier ones.
+
+The resolver in `operations.resolve_claims` is the single point that
+collapses the trail back into a per-item state for human-friendly
+rendering:
+
+1. For each `(item_id, agent_id)` pair, keep only the newest record.
+2. Per item, partition the per-agent records into terminal states
+   (`DONE`, `BLOCKED`, `CANCELLED`) and active states (`CLAIMED`,
+   `PARTIAL`, `COMPETING`, `REVIEW`).
+3. A terminal record that is at least as new as every active record on
+   that item wins — the item is rendered in its terminal state.
+4. Otherwise, count the active agents. Zero active → the item is
+   `OPEN` again. One active → use that agent's state. Two or more
+   active → `COMPETING`, with all claimants surfaced.
+
+This gives three properties that matter for git-native multi-agent work:
+
+- **No merge conflicts** on `.swarm/claims/` itself — every record lives
+  in its own filename, so concurrent claims by separate workers produce
+  separate files rather than competing edits to a shared file.
+- **Forensic completeness** — `swarm trail claims [--item ID]` shows
+  every state every agent ever asserted, with timestamps. Nothing is
+  silently rewritten.
+- **Concurrent-safe COMPETING aggregation** — multiple workers writing
+  active records on the same item don't fight over `queue.md`; the
+  resolver simply reports them as competitors.
+
+### Competing claimants (queue: SWC-039)
+
+Multiple agents can hold an active claim on the same item simultaneously.
+The trail records every claim independently; `competitors_for(paths,
+item_id)` lists everyone whose latest record is in
+`{CLAIMED, COMPETING, PARTIAL, REVIEW}`. Resolution to a winner is an
+explicit, auditable step rather than a silent overwrite:
+
+```bash
+swarm compete list API-042              # who is currently in the running
+swarm compete winner API-042 agent-B \  # promote one; record losers as withdrawn
+    --reason "passes burst-traffic edge case"
+```
+
+`promote_competitor` writes a fresh `CLAIMED` record for the winner and
+an `OPEN` record for each loser tagged `lost-competition: winner=<id>`.
+The trail therefore preserves the full history of *who tried what,
+when, and why one was chosen* — useful both for inspector retros and for
+training data on which agent specializes in which kind of work.
+
+### Hidden-in-plain-sight stigmergy: seals (`dot_swarm.seals`)
+
+A *seal* is a short HMAC tag embedded inline in coordination markdown as
+an HTML comment::
+
+    <!-- 🐝 sw-seal v1 <agent>:<hex8> -->
+
+The tag is the first 8 hex chars of `HMAC-SHA256(swarm_key, version ||
+agent_id || normalized_content)`. To outside readers it looks like an
+ordinary trailing comment in plain markdown; to an agent holding the
+swarm signing key, it authenticates the writer of the surrounding
+content and detects tampering on read.
+
+This is the integrity layer that the AEAD swarm key (SWC-046) does not
+provide, and vice versa:
+
+| Layer        | What it protects                | Visible to outsiders? |
+|--------------|---------------------------------|-----------------------|
+| Seals        | integrity + writer attribution  | yes (markdown stays human-readable) |
+| Swarm key    | confidentiality + integrity     | no (ciphertext on disk) |
+
+Seals are deliberately cheap and per-write: `swarm seal sign <file>`
+adds one to any coordination file, and `swarm seal verify` sweeps every
+markdown file under `.swarm/` and reports each as `VALID`, `INVALID`,
+`MISSING`, or `UNKEYED`. An `INVALID` seal is the digital analogue of a
+wrong cuticular signature — the colony notices an intruder by smell,
+not by checking a list.
+
+### Untrusted message bay (`federation/strangers/`)
+
+Federation's three-layer doorman previously rejected messages from
+unknown peers outright. That works against the way collaboration tends
+to start — a stranger usually tries to make contact *before* a trust
+relationship exists. The strangers bay holds those messages safely.
+
+Flow:
+
+1. A peer with no record in `trusted_peers/` (or whose intent is
+   disabled by policy) drops a message into our `inbox/`.
+2. `swarm federation triage`, or `swarm federation apply` with the
+   default `quarantine=True`, moves the message to
+   `federation/strangers/<file>.json` together with a sibling
+   `<file>.json.reason.txt` recording the doorman verdict.
+3. A reviewer inspects the bay (`swarm federation strangers list/show`)
+   and decides:
+   - `swarm federation strangers promote <file>` — adds the peer to
+     `trusted_peers/` with explicit scopes and moves the message back
+     to `inbox/` so the normal `federation apply` flow can take it.
+   - `swarm federation strangers reject <file>` — archives the message
+     under `federation/strangers/rejected/` *without* trusting the peer,
+     so repeat contact attempts are still recorded for forensic review.
+
+The bay grants strangers no write access to the queue, but it preserves
+their messages as evidence for trust decisions. Combined with seals on
+the doorman log, this makes the federation surface noisy-yet-safe: any
+party can attempt contact, and we get to keep every attempt on record
+without giving up the property that only trusted writers ever modify
+coordination state.

@@ -300,11 +300,16 @@ Item IDs: `SWC-<3-digit-number>` — assigned sequentially, never reused.
 
 <!-- ═══════════════ CORE ARCHITECTURE + REPO STANDARDS ═══════════════ -->
 
-- [ ] [SWC-033] [OPEN] Implement Conflict-Free Concurrency Mechanism (claims/ directory)
+- [x] [SWC-033] [DONE · 2026-05-01] Implement Conflict-Free Concurrency Mechanism (claims/ directory)
       project: architecture
       priority: high
-      notes: Transition to append-only file structure (.swarm/claims/) to avoid Git merge conflicts.
-             Update read protocols to dynamically resolve concurrent claims. [ARCH-001]
+      notes: .swarm/claims/ is now a true append-only trail. Every lifecycle op
+             (claim/partial/done/block/reopen/compete) appends an immutable JSON
+             record; release transitions write a superseding record rather than
+             deleting prior ones. resolve_claims picks newest-per-(item,agent),
+             aggregates concurrent active agents into COMPETING, and prefers
+             terminal records (DONE/BLOCKED) over equally-recent active claims.
+             swarm trail claims [--item ID] surfaces full history. [ARCH-001]
 
 - [x] [SWC-034] [DONE · 2026-04-20] Mandate MCP Server for Agent Interactions
       project: architecture
@@ -421,3 +426,35 @@ Item IDs: `SWC-<3-digit-number>` — assigned sequentially, never reused.
       priority: high
       notes: Ensure stable v0-to-v1 migration path (detect/migrate .swarm/).
              Validate final API surface.
+
+- [ ] [SWC-046] [OPEN · Phase 1 done 2026-05-01] Swarm Key: AEAD-encrypted trail + nestmate recognition
+      project: security
+      priority: high
+      notes: Phase 1 SHIPPED — vault.py (ChaCha20-Poly1305 envelopes), .swarm/.swarm_key
+             generation, trail.log entries written as swae1: envelopes when key
+             present, transparent decrypt on read, swarm key init/status/rotate/
+             seal/open CLI, [crypto] extra (cryptography>=42), v2 seals (16-hex
+             tag) as the new default. Tests: tests/test_vault.py (11 tests).
+             Phase 2 PENDING — extend AEAD to memory.md, state.md decision entries,
+             claim notes; transparent decrypt on the resolver path.
+             Phase 3 PENDING — federation key exchange under Doorman policy.
+             Original design notes preserved below for Phase 2/3 reference:
+             Properties: (1) confidentiality — pushed `.swarm/` reveals nothing
+             without the key, making `swarm trail visible` safe by default;
+             (2) authenticity — forged entries fail the AEAD tag and cannot be
+             inserted by any process without the key; (3) reflexive intrusion
+             response — `swarm heal` quarantines tag-failures as CRITICAL on
+             contact, the way an ant colony reacts to a wrong cuticular signature.
+             Phasing:
+               P1 — key generation in `swarm init`, `swarm key rotate`, AEAD on trail.log.
+               P2 — extend AEAD to memory.md, state.md decisions, claim notes.
+               P3 — federation: swarm-to-swarm key exchange under Doorman policy,
+                    replacing file-based OGP-lite with authenticated channels.
+             Does NOT replace the 18-pattern adversarial scanner — AEAD prevents
+             forgery from outside, not betrayal from inside (a worker bee that
+             goes rogue still smells right). Scanner remains the layer for that.
+             Crypto choice: XChaCha20-Poly1305 for nonce-misuse resistance
+             (24-byte random nonces); pynacl or cryptography package.
+             Cross-refs: docs/SECURITY.md → "Roadmap: the swarm key";
+                         docs/ARCHITECTURE.md → "Design Roadmap";
+                         README.md → "Coming: encrypted trails and the swarm key".
