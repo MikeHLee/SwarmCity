@@ -4,6 +4,15 @@ All notable changes to dot_swarm are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] — 2026-05-04
+
+### Fixed
+- Replaced all 20 `datetime.utcnow()` calls (deprecated in Python 3.12,
+  scheduled for removal in 3.14) with a new `dot_swarm.models.utcnow()`
+  helper that returns the same naive UTC datetime via
+  `datetime.now(timezone.utc).replace(tzinfo=None)`. Test suite now
+  passes cleanly under `-W error::DeprecationWarning`.
+
 ## [1.0.0] — 2026-05-02
 
 The first stable release. The protocol is frozen for the v1.x line:

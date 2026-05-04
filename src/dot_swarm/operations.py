@@ -21,7 +21,7 @@ from typing import Any, Iterator
 
 from .models import (
     Claim, ItemState, Priority, SwarmPaths, SwarmState, WorkItem,
-    _now_ts, _parse_ts, PRIORITY_ORDER,
+    _now_ts, _parse_ts, PRIORITY_ORDER, utcnow,
 )
 
 
@@ -122,7 +122,7 @@ def supersede_claims(
         item_id=item_id,
         agent_id=agent_id,
         state=new_state,
-        timestamp=datetime.utcnow(),
+        timestamp=utcnow(),
         proof=proof,
         note=note,
     ))
@@ -167,7 +167,7 @@ def promote_competitor(
             f"Active competitors: {[c.agent_id for c in rivals] or 'none'}"
         )
 
-    now = datetime.utcnow()
+    now = utcnow()
     winner_claim = Claim(
         item_id=item_id, agent_id=winner_agent, state=ItemState.CLAIMED,
         timestamp=now, note=f"promoted-winner: {reason}".strip(": "),
@@ -180,7 +180,7 @@ def promote_competitor(
             continue
         loser = Claim(
             item_id=item_id, agent_id=c.agent_id, state=ItemState.OPEN,
-            timestamp=datetime.utcnow(),
+            timestamp=utcnow(),
             note=f"lost-competition: winner={winner_agent}".strip(),
         )
         write_claim(paths, loser)
@@ -426,7 +426,7 @@ def claim_item(paths: SwarmPaths, item_id: str, agent_id: str, compete: bool = F
     else:
         new_state = ItemState.CLAIMED
 
-    now = datetime.utcnow()
+    now = utcnow()
     write_claim(paths, Claim(
         item_id=target.id,
         agent_id=agent_id,
@@ -456,7 +456,7 @@ def done_item(paths: SwarmPaths, item_id: str, agent_id: str, note: str = "") ->
         raise ValueError(f"Item {item_id} not found in active or pending queue.")
 
     target.state = ItemState.DONE
-    target.done_at = datetime.utcnow()
+    target.done_at = utcnow()
     if note:
         target.notes = (target.notes + " | " + note).strip(" | ")
 
@@ -477,7 +477,7 @@ def partial_item(paths: SwarmPaths, item_id: str, agent_id: str, note: str = "",
     if target is None:
         raise ValueError(f"Item {item_id} not found in active or pending queue.")
 
-    now = datetime.utcnow()
+    now = utcnow()
     write_claim(paths, Claim(
         item_id=item_id,
         agent_id=agent_id,
@@ -692,7 +692,7 @@ def crawl_directory(
         map_lines = [
             "",
             "## Directory Map",
-            f"*Last crawled: {datetime.utcnow().strftime('%Y-%m-%dT%H:%MZ')}*",
+            f"*Last crawled: {utcnow().strftime('%Y-%m-%dT%H:%MZ')}*",
             "",
         ]
         if divisions:
@@ -812,7 +812,7 @@ def append_memory(
     agent_id: str = "unknown",
 ) -> str:
     """Append a formatted entry to memory.md."""
-    date = datetime.utcnow().strftime("%Y-%m-%d")
+    date = utcnow().strftime("%Y-%m-%d")
     entry = f"\n## {date} — {topic} ({agent_id})\n\n"
     entry += f"**Decision**: {decision}\n\n"
     entry += f"**Why**: {why}\n"
@@ -835,7 +835,7 @@ def audit(paths: SwarmPaths, stale_hours: int = 48) -> list[dict]:
     """Return list of drift findings."""
     findings: list[dict] = []
     active, pending, done = read_queue(paths)
-    now = datetime.utcnow()
+    now = utcnow()
     threshold = timedelta(hours=stale_hours)
 
     for item in active:

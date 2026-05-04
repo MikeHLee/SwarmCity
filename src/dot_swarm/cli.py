@@ -10,7 +10,7 @@ from pathlib import Path
 
 import click
 
-from .models import ItemState, Priority, SwarmPaths
+from .models import ItemState, Priority, SwarmPaths, utcnow
 from .operations import (
     add_item, append_memory, audit, block_item, claim_item, crawl_directory,
     done_item, next_item_id, partial_item, ready_items, reopen_item,
@@ -118,7 +118,7 @@ def init(ctx: click.Context, level: str | None, division_code: str | None,
         f"# Context — {name}\n\n"
         f"**Level**: {'Organization' if not is_div else 'Division'}\n"
         f"**Division code**: {code}\n"
-        f"**Last updated**: {datetime.utcnow().strftime('%Y-%m-%d')}\n\n"
+        f"**Last updated**: {utcnow().strftime('%Y-%m-%d')}\n\n"
         "## What This Division Is\n\n"
         "(fill in)\n\n"
         "## Architecture Constraints\n\n"
@@ -130,7 +130,7 @@ def init(ctx: click.Context, level: str | None, division_code: str | None,
     # state.md
     _create_if_missing(swarm_dir / "state.md",
         f"# State — {name}\n\n"
-        f"**Last touched**: {datetime.utcnow().strftime('%Y-%m-%dT%H:%MZ')} by unknown\n"
+        f"**Last touched**: {utcnow().strftime('%Y-%m-%dT%H:%MZ')} by unknown\n"
         "**Current focus**: (not set)\n"
         "**Active items**: (none)\n"
         "**Blockers**: None\n"
@@ -404,7 +404,7 @@ def review(ctx: click.Context, item_id: str, agent: str | None) -> None:
     
     target.state = ItemState.REVIEW
     target.claimed_by = agent_id
-    target.claimed_at = datetime.utcnow()
+    target.claimed_at = utcnow()
     
     write_queue(paths, active, pending, done)
     click.echo(f"Item [{item_id}] is now in REVIEW by {agent_id}.")
@@ -624,7 +624,7 @@ def handoff(ctx: click.Context, fmt: str) -> None:
     state = read_state(paths)
     active, pending, done = read_queue(paths)
     name = paths.root.parent.name
-    now = datetime.utcnow().strftime("%Y-%m-%dT%H:%MZ")
+    now = utcnow().strftime("%Y-%m-%dT%H:%MZ")
 
     lines = [
         f"# dot_swarm Handoff — {name} — {now}",
@@ -2231,7 +2231,7 @@ def spawn(ctx: click.Context, item_id: str | None, agent_name: str, role: str | 
         click.echo(f"Error: '{agent_bin}' not found on PATH. Install it first.", err=True)
         sys.exit(1)
 
-    ts = datetime.utcnow().strftime("%H%M%S")
+    ts = utcnow().strftime("%H%M%S")
     target_name = role if role else item_id
 
     if not item_id and not role:
@@ -3417,7 +3417,7 @@ def _quarantine_findings(
     quarantine_dir = paths.root / "quarantine"
     quarantine_dir.mkdir(exist_ok=True)
 
-    ts = datetime.utcnow().strftime("%Y%m%dT%H%MZ")
+    ts = utcnow().strftime("%Y%m%dT%H%MZ")
     by_source: dict[str, list] = {}
     for f in findings:
         by_source.setdefault(f.source, []).append(f)

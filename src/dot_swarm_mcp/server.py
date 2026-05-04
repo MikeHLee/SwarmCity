@@ -28,7 +28,7 @@ import mcp.server.stdio
 import mcp.types as types
 from mcp.server import Server
 
-from dot_swarm.models import Priority, SwarmPaths, ItemState
+from dot_swarm.models import Priority, SwarmPaths, ItemState, utcnow
 from dot_swarm.operations import (
     add_item,
     append_memory,
@@ -437,7 +437,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
                     item_id=item.id,
                     agent_id=arguments["agent_id"],
                     state=ItemState.PARTIAL,
-                    timestamp=datetime.utcnow(),
+                    timestamp=utcnow(),
                     proof=proof,
                     note=arguments.get("note", "")
                 ))
@@ -486,7 +486,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
             active, pending, _ = read_queue(paths)
             from datetime import datetime
             name_str = paths.root.parent.name
-            now = datetime.utcnow().strftime("%Y-%m-%dT%H:%MZ")
+            now = utcnow().strftime("%Y-%m-%dT%H:%MZ")
             lines = [
                 f"# dot_swarm Handoff — {name_str} — {now}", "",
                 "## Current State",

@@ -7,9 +7,18 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
+
+
+def utcnow() -> datetime:
+    """Naive UTC datetime — replacement for the deprecated stdlib `datetime.utcnow()`.
+
+    Returns a naive datetime (tzinfo stripped) so it stays comparable with the
+    naive datetimes parsed back from `state.md` / `claims/` markdown timestamps.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class ItemState(str, Enum):
@@ -147,7 +156,7 @@ class WorkItem:
             reason = self.notes.removeprefix("BLOCKED: ") if self.notes else "unknown"
             return f"BLOCKED · {reason}"
         elif self.state == ItemState.DONE:
-            return f"DONE · {_fmt_ts(self.done_at or datetime.utcnow())}"
+            return f"DONE · {_fmt_ts(self.done_at or utcnow())}"
         elif self.state == ItemState.CANCELLED:
             return "CANCELLED"
         return "OPEN"
@@ -277,4 +286,4 @@ def _fmt_ts(dt: datetime | None) -> str:
 
 
 def _now_ts() -> str:
-    return datetime.utcnow().strftime("%Y-%m-%dT%H:%MZ")
+    return utcnow().strftime("%Y-%m-%dT%H:%MZ")

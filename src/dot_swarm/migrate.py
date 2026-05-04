@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from .models import Claim, ItemState, SwarmPaths
+from .models import Claim, ItemState, SwarmPaths, utcnow
 from .operations import read_queue, write_claim
 
 
@@ -141,7 +141,7 @@ def migrate_swarm(swarm_path: Path, dry_run: bool = False) -> MigrationReport:
                     item_id=item.id,
                     agent_id=item.claimed_by,
                     state=item.state,
-                    timestamp=item.claimed_at or datetime.utcnow(),
+                    timestamp=item.claimed_at or utcnow(),
                     note=f"backfilled-by-swarm-migrate from queue.md",
                 ))
                 report.backfilled_claims += 1
