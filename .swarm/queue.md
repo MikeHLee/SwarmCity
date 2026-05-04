@@ -374,17 +374,36 @@ Item IDs: `SWC-<3-digit-number>` — assigned sequentially, never reused.
       Depends on: SWC-003
       project: distribution
 
-- [ ] [SWC-005] [OPEN] Update Homebrew formula for dot-swarm v0.3.0
-      File: swarm-city.rb.template
-      - Rename package URL from swarm-city → dot-swarm
-      - Bump version to 0.3.0
-      - Replace SHA256 placeholder with real hash from PyPI tarball
-      Depends on: SWC-004 (need live PyPI tarball for SHA256)
+- [x] [SWC-005] [DONE · 2026-05-04] Update Homebrew formula for dot-swarm v1.0.0
+      File: dot-swarm.rb (replaces swarm-city.rb.template)
+      - Renamed swarm-city → dot-swarm; class DotSwarm
+      - Pinned to dot_swarm 1.0.0 PyPI tarball
+        sha256 0db6847386d96c201c1df7ac047894dc765327fbc4fb9c15dfb74ecb83d47658
+      - 29 transitive resource blocks for dot-swarm[crypto] generated from
+        `pip install --dry-run --report` (homebrew-pypi-poet is broken on
+        Python ≥ 3.12; the report-based method is documented in
+        .swarm/workflows/release.md)
+      - depends_on "rust" => :build for cryptography sdist build path
+      - test do: swarm --version + swarm init/add round-trip
+      - Homepage corrected MikeHLee → oasis-main
+      Landed via PR #1 (merged into main 2026-05-04T17:09Z).
       project: distribution
 
-- [ ] [SWC-006] [OPEN] Submit Homebrew formula to tap
-      Decision needed: publish to homebrew-core or host own tap (e.g. MikeHLee/homebrew-dot-swarm)
-      Depends on: SWC-005
+- [x] [SWC-006] [DONE · 2026-05-04] Submit Homebrew formula to tap
+      Decision: project-owned tap (NOT homebrew-core) for the v1.x line.
+      Rationale: instant publish on PyPI release rather than days-to-weeks
+      homebrew-core review, full control over resource pinning churn while
+      tooling/CLI surface evolves, support for pre-release tags
+      (v1.1.0-rc.x) which homebrew-core does not accept. Re-evaluate
+      homebrew-core submission once v1.x stabilises.
+      Tap repo: https://github.com/oasis-main/homebrew-dot-swarm
+        - Formula/dot-swarm.rb (mirrors dot_swarm/dot-swarm.rb)
+        - .github/workflows/tests.yml (brew test-bot matrix on
+          macos-14, macos-13, ubuntu-latest)
+        - README.md (tap-vs-core rationale + install instructions)
+        - LICENSE (MIT)
+        - Tagged v1.0.0
+      Install:  brew tap oasis-main/dot-swarm && brew install dot-swarm
       project: distribution
 
 ## Done
